@@ -16,7 +16,7 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import type { EvaluationResult, ItemResult, ItemStatus, PageResult, SectionResult, Summary } from '@serigy/shared';
-import { summarize } from '@serigy/shared';
+import { groupPagesByNumber, summarize } from '@serigy/shared';
 import { api, download } from '../api';
 import { SCORE_STYLE, scoreTone } from '../score';
 import { AMBIENTE_TONE } from './AmbienteBadge';
@@ -219,9 +219,9 @@ function ItemDetails({ item, page, section }: { item: ItemResult; page: PageResu
 }
 
 /** Cor da página (borda lateral e cabeçalho) conforme o pior resultado dos itens. */
-function pageTone(page: PageResult, pendingCount: number): string {
+function pageTone(summary: Summary, pendingCount: number): string {
   if (pendingCount > 0) return 'border-l-blue-400';
-  return SCORE_STYLE[scoreTone(page.summary.score)].stripe;
+  return SCORE_STYLE[scoreTone(summary.score)].stripe;
 }
 
 interface Props {
@@ -412,45 +412,62 @@ export function ResultView({ result, onChange, pending, progress, onCancel }: Pr
       </div>
 
       <div className="space-y-3">
-        {result.pages.map((page) => {
-          const sections = page.sections
+        {/* Um item da matriz = um número: páginas de pastas diferentes com o mesmo número viram um grupo só */}
+        {groupPagesByNumber(result.pages).map((group) => {
+          const sections = group.sections
             .map((s) => ({ ...s, items: s.items.filter((i) => filter === 'all' || (!pending?.has(i.id) && i.status === filter)) }))
             .filter((s) => s.items.length > 0);
           if (sections.length === 0) return null;
 
-          const allItems = page.sections.flatMap((s) => s.items);
+          const allItems = group.sections.flatMap((s) => s.items);
+          const summary = summarize(allItems.filter((i) => !pending?.has(i.id)));
           const pendingCount = allItems.filter((i) => pending?.has(i.id)).length;
           const hasRunning = allItems.some((i) => pending?.get(i.id) === 'running');
-          const isOpen = openPages[page.id] ?? hasRunning;
+          const isOpen = openPages[group.number] ?? hasRunning;
+          const noSchema = group.pages.filter((p) => !p.schemaFound);
 
           return (
             <Collapsible
-              key={page.id}
+              key={group.number}
               open={isOpen}
-              onOpenChange={(o) => setOpenPages((prev) => ({ ...prev, [page.id]: o }))}
-              className={cn('overflow-hidden rounded-xl border border-l-4 bg-card shadow-sm', pageTone(page, pendingCount))}
+              onOpenChange={(o) => setOpenPages((prev) => ({ ...prev, [group.number]: o }))}
+              className={cn('overflow-hidden rounded-xl border border-l-4 bg-card shadow-sm', pageTone(summary, pendingCount))}
             >
               <CollapsibleTrigger className="flex w-full flex-wrap items-center gap-2 p-3.5 text-left font-medium hover:bg-muted/60">
                 <ChevronRight className={cn('size-4 shrink-0 text-muted-foreground transition-transform', isOpen && 'rotate-90')} />
-                {page.number}. {page.title}
-                <code className="text-xs font-normal text-muted-foreground">{page.id}</code>
+                {group.number}. {group.title}
+                {group.pages.map((p) => (
+                  <code key={p.id} className="text-xs font-normal text-muted-foreground">
+                    {p.id}
+                  </code>
+                ))}
                 {hasRunning && <Spinner className="text-primary" />}
                 <span className="ml-auto text-sm font-normal text-muted-foreground">
                   {pendingCount > 0 ? (
                     `${allItems.length - pendingCount}/${allItems.length} concluídos`
                   ) : (
-                    <ScoreBadge summary={page.summary} />
+                    <ScoreBadge summary={summary} />
                   )}
                 </span>
-                {!isLive && !page.schemaFound && <Badge variant="destructive">schema ausente</Badge>}
+                {!isLive && noSchema.length > 0 && (
+                  <Badge variant="destructive">
+                    schema ausente{group.pages.length > 1 ? ` (${noSchema.map((p) => p.folder).join(', ')})` : ''}
+                  </Badge>
+                )}
               </CollapsibleTrigger>
               <CollapsibleContent>
                 <div className="space-y-5 border-t bg-card/60 p-4">
-                  <a href={page.docUrl} target="_blank" rel="noreferrer" className="text-xs text-primary hover:underline">
-                    Documentação oficial
-                  </a>
-                  {sections.map((s) => (
-                    <div key={s.id} className="space-y-2">
+                  <div className="flex flex-wrap gap-x-4 gap-y-1">
+                    {group.pages.map((p) => (
+                      <a key={p.id} href={p.docUrl} target="_blank" rel="noreferrer" className="text-xs text-primary hover:underline">
+                        Documentação oficial{group.pages.length > 1 ? ` (${p.folder})` : ''}
+                      </a>
+                    ))}
+                  </div>
+                  {sections.map((s) => {
+                    const page = s.page; // página (pasta) de origem desta seção
+                    return (
+                    <div key={`${page.id}-${s.id}`} className="space-y-2">
                       <div>
                         <h3 className="flex flex-wrap items-center gap-2 text-sm font-semibold">
                           {s.id}. {s.title}
@@ -568,7 +585,8 @@ export function ResultView({ result, onChange, pending, progress, onCancel }: Pr
                         })}
                       </div>
                     </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </CollapsibleContent>
             </Collapsible>

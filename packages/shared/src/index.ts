@@ -367,3 +367,38 @@ export type StreamEvent =
   | { type: 'item'; pageId: string; sectionId: string; item: ItemResult }
   | { type: 'done'; result: EvaluationResult }
   | { type: 'error'; message: string; status: number };
+
+// ---------------------------------------------------------------------------
+// Agrupamento de páginas pelo número da matriz
+// ---------------------------------------------------------------------------
+
+/**
+ * O mesmo número da matriz pode existir em mais de uma pasta da documentação (ex.: "11. Planejamento e
+ * Prestação de Contas" em comum + consorcios-publicos). Para o usuário é UM item só: este grupo reúne as
+ * páginas de mesmo número e as suas seções, em ordem numérica, cada uma com a página de origem.
+ */
+export interface PageGroup<P, S> {
+  number: string;
+  title: string;
+  pages: P[];
+  sections: Array<S & { page: P }>;
+}
+
+export function groupPagesByNumber<P extends { number: string; title: string; sections: Array<{ id: string }> }>(
+  pages: P[],
+): Array<PageGroup<P, P['sections'][number]>> {
+  type S = P['sections'][number];
+  const groups = new Map<string, PageGroup<P, S>>();
+  for (const page of pages) {
+    let group = groups.get(page.number);
+    if (!group) {
+      group = { number: page.number, title: page.title, pages: [], sections: [] };
+      groups.set(page.number, group);
+    }
+    group.pages.push(page);
+    for (const section of page.sections) group.sections.push({ ...section, page });
+  }
+  const list = [...groups.values()];
+  for (const g of list) g.sections.sort((a, b) => compareIds(a.id, b.id));
+  return list.sort((a, b) => compareIds(a.number, b.number));
+}

@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { ChevronRight } from 'lucide-react';
-import type { CatalogPage } from '@serigy/shared';
+import { groupPagesByNumber, type CatalogPage } from '@serigy/shared';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
@@ -14,28 +14,33 @@ interface Props {
   onChange: (next: Set<string>) => void;
 }
 
-const idsOf = (p: CatalogPage): string[] => p.sections.flatMap((s) => s.items.map((i) => i.id));
-
-/** Árvore página → seção → item com checkboxes e busca. O número da página vem antes do título. */
+/**
+ * Árvore grupo → seção → item com checkboxes e busca. O grupo é o NÚMERO da matriz: páginas de pastas
+ * diferentes com o mesmo número (ex.: "11. Planejamento e Prestação de Contas" em comum + consórcios)
+ * aparecem como um item só, com as seções em ordem numérica.
+ */
 export function ItemSelector({ pages, selected, onChange }: Props) {
   const [query, setQuery] = useState('');
   const [open, setOpen] = useState<Record<string, boolean>>({});
   const q = query.trim().toLowerCase();
 
+  const groups = useMemo(() => groupPagesByNumber(pages), [pages]);
+  const idsOf = (g: (typeof groups)[number]): string[] => g.sections.flatMap((s) => s.items.map((i) => i.id));
+
   const visible = useMemo(
     () =>
-      pages
-        .map((p) => ({
-          page: p,
-          sections: p.sections
-            .map((s) => ({
-              section: s,
-              items: s.items.filter((i) => !q || `${i.id} ${i.descricao} ${i.atributo}`.toLowerCase().includes(q)),
+      groups
+        .map((group) => ({
+          group,
+          sections: group.sections
+            .map((section) => ({
+              section,
+              items: section.items.filter((i) => !q || `${i.id} ${i.descricao} ${i.atributo}`.toLowerCase().includes(q)),
             }))
             .filter((s) => s.items.length > 0),
         }))
-        .filter((p) => p.sections.length > 0),
-    [pages, q],
+        .filter((g) => g.sections.length > 0),
+    [groups, q],
   );
 
   const toggle = (ids: string[], on: boolean) => {
@@ -44,7 +49,7 @@ export function ItemSelector({ pages, selected, onChange }: Props) {
     onChange(next);
   };
 
-  const all = pages.flatMap(idsOf);
+  const all = groups.flatMap(idsOf);
 
   return (
     <div className="rounded-lg border bg-card">
@@ -68,34 +73,38 @@ export function ItemSelector({ pages, selected, onChange }: Props) {
 
       <ScrollArea className="max-h-96">
         <div className="space-y-1 p-3">
-          {visible.map(({ page, sections }) => {
-            const pageIds = idsOf(page);
-            const count = pageIds.filter((id) => selected.has(id)).length;
-            const isOpen = open[page.id] ?? q !== '';
+          {visible.map(({ group, sections }) => {
+            const groupIds = idsOf(group);
+            const count = groupIds.filter((id) => selected.has(id)).length;
+            const isOpen = open[group.number] ?? q !== '';
             return (
-              <Collapsible key={page.id} open={isOpen} onOpenChange={(o) => setOpen((prev) => ({ ...prev, [page.id]: o }))}>
+              <Collapsible key={group.number} open={isOpen} onOpenChange={(o) => setOpen((prev) => ({ ...prev, [group.number]: o }))}>
                 <div className="flex items-center gap-2 rounded-md py-1 hover:bg-muted/50">
                   <Checkbox
-                    aria-label={`Selecionar todos os itens de ${page.number}. ${page.title}`}
-                    checked={count === pageIds.length}
-                    indeterminate={count > 0 && count < pageIds.length}
-                    onCheckedChange={(checked) => toggle(pageIds, checked)}
+                    aria-label={`Selecionar todos os itens de ${group.number}. ${group.title}`}
+                    checked={count === groupIds.length}
+                    indeterminate={count > 0 && count < groupIds.length}
+                    onCheckedChange={(checked) => toggle(groupIds, checked)}
                   />
                   <CollapsibleTrigger className="flex flex-1 items-center gap-2 text-left text-sm font-medium">
                     <ChevronRight className={cn('size-4 shrink-0 text-muted-foreground transition-transform', isOpen && 'rotate-90')} />
                     <span>
-                      <span className="text-muted-foreground">{page.number}.</span> {page.title}
+                      <span className="text-muted-foreground">{group.number}.</span> {group.title}
                     </span>
-                    <code className="text-xs text-muted-foreground">{page.id}</code>
+                    {group.pages.map((p) => (
+                      <code key={p.id} className="text-xs text-muted-foreground">
+                        {p.id}
+                      </code>
+                    ))}
                     <span className="ml-auto text-xs text-muted-foreground">
-                      {count}/{pageIds.length}
+                      {count}/{groupIds.length}
                     </span>
                   </CollapsibleTrigger>
                 </div>
                 <CollapsibleContent>
                   <div className="ml-6 space-y-2 border-l pb-2 pl-4">
                     {sections.map(({ section, items }) => (
-                      <div key={section.id}>
+                      <div key={`${section.page.id}-${section.id}`}>
                         <div className="text-sm font-medium text-muted-foreground">
                           {section.id}. {section.title}
                         </div>

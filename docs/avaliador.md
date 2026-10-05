@@ -210,6 +210,13 @@ Status de cada item:
 - **Ordem**: páginas pelo número da página na matriz (o número do `# N. Título`; ex.: Ouvidoria = 14), seções e
   itens numericamente por segmento (`4.1.2` antes de `4.1.10`), no catálogo/UI, no resultado e nas pendências do
   relatório (`compareIds` em `packages/shared`). Empates de número mantêm a ordem comum → pasta do poder.
+- **Um item da matriz = um número (agrupamento)**: o mesmo número pode existir em mais de uma pasta da documentação
+  (3 Receitas, 4 Despesas, 8 Licitações e 11 Planejamento e Prestação de Contas: `comum` + a pasta do poder). Para o
+  usuário é **um item só**: a seleção de itens, o resultado e o relatório agrupam as páginas pelo número
+  (`groupPagesByNumber` em `packages/shared`), mesclando as seções em ordem numérica (ex.: consórcios, item 11:
+  11.1, 11.2, 11.3, 11.5, 11.6, 11.7, 11.11), com o percentual do grupo todo. Nada muda na avaliação: cada seção continua
+  avaliada contra o schema da sua pasta, e o resultado da API segue com uma página por pasta (`PageResult`); o
+  agrupamento é feito na apresentação.
 - **Validação do schema (esperado x encontrado)**: achar o `serigyItem` sob um schema de mesmo caminho não basta; o
   **endereço completo** de `serigySchema` precisa corresponder ao da documentação (`canonicalSchema` em `markup.ts`:
   ignora caixa, espaços, barra final e o prefixo `/2026`, mas confere protocolo e host). Cada item traz

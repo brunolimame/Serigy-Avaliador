@@ -1,4 +1,4 @@
-import { AMBIENTES, compareIds, type EvaluationResult, type FetchOrigin, type ItemResult, type ItemStatus, type Summary } from '@serigy/shared';
+import { AMBIENTES, compareIds, groupPagesByNumber, summarize, type EvaluationResult, type FetchOrigin, type ItemResult, type ItemStatus, type Summary } from '@serigy/shared';
 
 const ICON: Record<ItemStatus, string> = { ok: '✅', warning: '⚠️', empty: '➖', missing: '❌' };
 const LABEL: Record<ItemStatus, string> = {
@@ -81,10 +81,14 @@ export function renderMarkdown(r: EvaluationResult): string {
   out.push('## Resumo por página', '');
   out.push('| Página | Schema encontrado | Total | ✅ | ⚠️ | ➖ | ❌ | Atendimento |');
   out.push('|---|:---:|---:|---:|---:|---:|---:|---:|');
-  for (const p of r.pages) {
-    const s = p.summary;
+  // Um item da matriz = um número, mesmo que ele exista em mais de uma pasta da documentação.
+  const groups = groupPagesByNumber(r.pages);
+  for (const g of groups) {
+    const s = summarize(g.sections.flatMap((x) => x.items));
+    const links = g.pages.map((p) => `[${cell(p.id)}](${p.docUrl})`).join(' + ');
+    const schema = g.pages.every((p) => p.schemaFound) ? 'sim' : g.pages.some((p) => p.schemaFound) ? 'parcial' : 'não';
     out.push(
-      `| [${cell(p.number + '. ' + p.title)}](${p.docUrl}) ${code(p.id)} | ${p.schemaFound ? 'sim' : 'não'} | ${s.total} | ${s.ok} | ${s.warning} | ${s.empty} | ${s.missing} | ${s.score}% |`,
+      `| ${cell(g.number + '. ' + g.title)} — ${links} | ${schema} | ${s.total} | ${s.ok} | ${s.warning} | ${s.empty} | ${s.missing} | ${s.score}% |`,
     );
   }
   out.push('');
@@ -131,16 +135,19 @@ export function renderMarkdown(r: EvaluationResult): string {
   }
 
   out.push('## Detalhamento', '');
-  for (const p of r.pages) {
-    out.push(`### ${p.number}. ${p.title} — \`${p.id}\``, '');
-    out.push(`- Schema esperado: ${code(p.schemaUrl)} (${p.schemaFound ? 'encontrado' : 'não encontrado'})`);
-    out.push(`- Documentação: ${p.docUrl}`);
-    out.push(`- URLs onde o schema foi encontrado: ${p.analyzedUrls.length ? urlLinks(p.analyzedUrls).split('<br>').join(', ') : '—'}`);
-    for (const f of p.iframes) {
-      out.push(`- **iframe com serigyLink** em ${f.pageUrl}: conteúdo avaliado em ${f.target}`);
+  for (const g of groups) {
+    out.push(`### ${g.number}. ${g.title}`, '');
+    for (const p of g.pages) {
+      const prefix = g.pages.length > 1 ? `\`${p.id}\` — ` : '';
+      out.push(`- ${prefix}Schema esperado: ${code(p.schemaUrl)} (${p.schemaFound ? 'encontrado' : 'não encontrado'})`);
+      out.push(`- ${prefix}Documentação: ${p.docUrl}`);
+      out.push(`- ${prefix}URLs onde o schema foi encontrado: ${p.analyzedUrls.length ? urlLinks(p.analyzedUrls).split('<br>').join(', ') : '—'}`);
+      for (const f of p.iframes) {
+        out.push(`- ${prefix}**iframe com serigyLink** em ${f.pageUrl}: conteúdo avaliado em ${f.target}`);
+      }
     }
     out.push('');
-    for (const s of p.sections) {
+    for (const s of g.sections) {
       out.push(`#### ${s.id}. ${s.title}`, '');
       if (s.caminhoUrl) out.push(`Caminho sugerido: ${code(s.caminhoUrl)}`, '');
       for (const n of s.notes) out.push(`> ${n}`);
