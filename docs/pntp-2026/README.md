@@ -19,5 +19,4 @@ Cada arquivo traz as seções, o "Caminho URL" esperado, a tabela Item/Critério
 
 Todas as 36 páginas de `/2026/` do Serigy estão cobertas. O site também publica PNTP 2024 e PETP 2026 (`/2024/`, `/petp/`), que não fazem parte desta cópia.
 
-Avaliação do cpac.local contra estes itens: [`avaliacao-cpac.md`](avaliacao-cpac.md).
 Para atualizar: baixar as páginas (links listados no bundle `assets/js/app.*.js` do Serigy) e reconverter.

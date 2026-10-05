@@ -1,0 +1,18 @@
+{
+  "name": "serigy-avaliador",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Avaliador de portais de transparência contra a matriz PNTP 2026 (Serigy / TCE-SE)",
+  "packageManager": "pnpm@10.33.0",
+  "scripts": {
+    "dev": "pnpm -r --parallel --filter @serigy/api --filter @serigy/web dev",
+    "build": "pnpm --filter @serigy/web build",
+    "start": "pnpm --filter @serigy/api start",
+    "catalog": "pnpm --filter @serigy/api catalog",
+    "typecheck": "pnpm -r typecheck",
+    "test": "pnpm -r test"
+  },
+  "devDependencies": {
+    "typescript": "^7.0.2"
+  }
+}

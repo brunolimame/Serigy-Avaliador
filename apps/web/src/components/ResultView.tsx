@@ -1,0 +1,499 @@
+import { useState } from 'react';
+import {
+  ChevronRight,
+  CircleAlert,
+  CircleCheck,
+  CircleMinus,
+  CircleX,
+  Clock,
+  Download,
+  FileJson,
+  Frame,
+  Loader2,
+  RefreshCw,
+  TriangleAlert,
+  X,
+  type LucideIcon,
+} from 'lucide-react';
+import type { EvaluationResult, ItemResult, ItemStatus, PageResult, SectionResult, Summary } from '@serigy/shared';
+import { api, download } from '../api';
+import type { PendingState } from '../live';
+import { mergeReevaluated } from '../merge';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent } from '@/components/ui/card';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { Progress } from '@/components/ui/progress';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { cn } from '@/lib/utils';
+
+/** Paleta suave por resultado: fundo do item, borda, selo e ícone. */
+const TONE: Record<ItemStatus, { label: string; row: string; chip: string; icon: LucideIcon; iconClass: string }> = {
+  ok: {
+    label: 'Atendido',
+    row: 'border-emerald-200 bg-emerald-50/80 dark:border-emerald-900 dark:bg-emerald-950/30',
+    chip: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/50 dark:text-emerald-200',
+    icon: CircleCheck,
+    iconClass: 'text-emerald-600',
+  },
+  warning: {
+    label: 'Atenção',
+    row: 'border-amber-200 bg-amber-50/80 dark:border-amber-900 dark:bg-amber-950/30',
+    chip: 'bg-amber-100 text-amber-800 dark:bg-amber-900/50 dark:text-amber-200',
+    icon: TriangleAlert,
+    iconClass: 'text-amber-600',
+  },
+  empty: {
+    label: 'Vazio declarado',
+    row: 'border-sky-200 bg-sky-50/80 dark:border-sky-900 dark:bg-sky-950/30',
+    chip: 'bg-sky-100 text-sky-800 dark:bg-sky-900/50 dark:text-sky-200',
+    icon: CircleMinus,
+    iconClass: 'text-sky-600',
+  },
+  missing: {
+    label: 'Não encontrado',
+    row: 'border-rose-200 bg-rose-50/80 dark:border-rose-900 dark:bg-rose-950/30',
+    chip: 'bg-rose-100 text-rose-800 dark:bg-rose-900/50 dark:text-rose-200',
+    icon: CircleX,
+    iconClass: 'text-rose-600',
+  },
+};
+
+const PENDING_TONE: Record<PendingState, { label: string; row: string; chip: string }> = {
+  waiting: { label: 'Aguardando…', row: 'border-slate-200 bg-slate-50/70 dark:bg-slate-900/30', chip: 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300' },
+  running: { label: 'Analisando…', row: 'border-blue-200 bg-blue-50/80 dark:border-blue-900 dark:bg-blue-950/30', chip: 'bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-200' },
+  skipped: { label: 'Não analisado', row: 'border-slate-200 bg-slate-50/70 dark:bg-slate-900/30', chip: 'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400' },
+};
+
+function Spinner({ className }: { className?: string }) {
+  return <Loader2 aria-hidden className={cn('size-3.5 animate-spin', className)} />;
+}
+
+function Stat({ label, value, icon: Icon, color }: { label: string; value: string | number; icon: LucideIcon; color: string }) {
+  return (
+    <Card size="sm">
+      <CardContent className="flex items-center gap-3">
+        <Icon className={cn('size-6 shrink-0', color)} />
+        <div>
+          <div className={cn('text-2xl font-semibold tabular-nums leading-tight', color)}>{value}</div>
+          <div className="text-xs text-muted-foreground">{label}</div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function SummaryStats({ s }: { s: Summary }) {
+  return (
+    <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
+      <Stat label="Atendimento" value={`${s.score}%`} icon={CircleCheck} color="text-primary" />
+      <Stat label="Itens avaliados" value={s.total} icon={Clock} color="text-slate-700" />
+      <Stat label="Atendidos" value={s.ok} icon={CircleCheck} color="text-emerald-700" />
+      <Stat label="Atenção" value={s.warning} icon={TriangleAlert} color="text-amber-700" />
+      <Stat label="Vazios declarados" value={s.empty} icon={CircleMinus} color="text-sky-700" />
+      <Stat label="Não encontrados" value={s.missing} icon={CircleX} color="text-rose-700" />
+    </div>
+  );
+}
+
+function UrlList({ urls }: { urls: string[] }) {
+  return (
+    <>
+      {urls.map((u, n) => (
+        <span key={u}>
+          {n > 0 && ', '}
+          <a href={u} target="_blank" rel="noreferrer" className="text-primary underline-offset-2 hover:underline">
+            {u}
+          </a>
+        </span>
+      ))}
+    </>
+  );
+}
+
+/** Explica por que o item não foi atendido, com o que era esperado e o que foi encontrado. */
+function ItemDetails({ item, page, section }: { item: ItemResult; page: PageResult; section: SectionResult }) {
+  return (
+    <div className="space-y-2 rounded-lg border bg-white/70 p-3 text-xs dark:bg-black/20">
+      <div>
+        <div className="text-sm font-semibold">
+          {item.id} — {item.descricao}
+        </div>
+        <div className="text-muted-foreground">
+          Critério(s): {item.criterios.join(', ') || '—'} · Página {page.number}. {page.title} › {section.id}. {section.title}
+          {section.caminhoUrl && (
+            <>
+              {' '}
+              · Caminho sugerido: <code>{section.caminhoUrl}</code>
+            </>
+          )}
+        </div>
+      </div>
+      <p>
+        <strong>Não atendido:</strong> {item.message}
+      </p>
+      <p>
+        <strong>Esperado:</strong> {item.expected}
+      </p>
+      {item.evidence.length > 0 && (
+        <div>
+          <strong>Encontrado:</strong>
+          <ul className="mt-1 space-y-1">
+            {item.evidence.map((e) => (
+              <li key={e.pageUrl + e.snippet} className="break-all">
+                <code className="rounded bg-muted px-1">{e.snippet}</code> em {e.pageUrl}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+      {item.examples?.map((ex) => (
+        <Collapsible key={ex.title + ex.html}>
+          <CollapsibleTrigger className="flex items-center gap-1 text-primary hover:underline">
+            <ChevronRight className="size-3.5" />
+            Exemplo da documentação: {ex.title}
+          </CollapsibleTrigger>
+          <CollapsibleContent>
+            {/* Barra de rolagem vertical e horizontal para exemplos longos */}
+            <pre className="mt-1 max-h-64 overflow-auto rounded-md bg-slate-800 p-3 text-slate-100">{ex.html}</pre>
+          </CollapsibleContent>
+        </Collapsible>
+      ))}
+      <a href={page.docUrl} target="_blank" rel="noreferrer" className="inline-block text-primary hover:underline">
+        Ver documentação oficial desta página
+      </a>
+    </div>
+  );
+}
+
+/** Cor da página (borda lateral e cabeçalho) conforme o pior resultado dos itens. */
+function pageTone(page: PageResult, pendingCount: number): string {
+  if (pendingCount > 0) return 'border-l-blue-400';
+  if (page.summary.missing > 0) return 'border-l-rose-400';
+  if (page.summary.warning > 0) return 'border-l-amber-400';
+  return 'border-l-emerald-400';
+}
+
+interface Props {
+  result: EvaluationResult;
+  onChange: (next: EvaluationResult) => void;
+  /** Itens ainda sem resultado (avaliação em andamento ou interrompida). */
+  pending?: Map<string, PendingState>;
+  progress?: { done: number; total: number };
+  /** Presente enquanto a avaliação está rodando. */
+  onCancel?: () => void;
+}
+
+export function ResultView({ result, onChange, pending, progress, onCancel }: Props) {
+  const isLive = pending !== undefined;
+  const running = onCancel !== undefined;
+  const lastFetched = result.fetched.at(-1);
+
+  const [filter, setFilter] = useState<ItemStatus | 'all'>('all');
+  const [busy, setBusy] = useState(false);
+  const [exportError, setExportError] = useState<string | null>(null);
+  const [reevaluating, setReevaluating] = useState<string | null>(null);
+  const [itemErrors, setItemErrors] = useState<Record<string, string>>({});
+  // Tudo começa FECHADO; só as páginas em análise abrem sozinhas (e fecham ao terminar). O usuário manda depois.
+  const [openPages, setOpenPages] = useState<Record<string, boolean>>({});
+  const [openItems, setOpenItems] = useState<Record<string, boolean>>({});
+
+  const stamp = result.finishedAt.slice(0, 10);
+  const host = new URL(result.url).hostname.replace(/[^a-z0-9.-]/gi, '_');
+
+  async function exportMarkdown() {
+    setBusy(true);
+    setExportError(null);
+    try {
+      download(`avaliacao-serigy-${host}-${stamp}.md`, await api.reportMarkdown(result), 'text/markdown');
+    } catch (err) {
+      setExportError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  /** Executa de novo a avaliação só deste item (com os mesmos parâmetros) e atualiza o resultado. */
+  async function reevaluate(itemId: string) {
+    setReevaluating(itemId);
+    setItemErrors(({ [itemId]: _drop, ...rest }) => rest);
+    try {
+      const fresh = await api.evaluate({
+        url: result.url,
+        poder: result.poder,
+        items: [itemId],
+        maxPages: result.crawl.maxPages,
+        tryDocumentedCase: result.crawl.tryDocumentedCase,
+      });
+      onChange(mergeReevaluated(result, fresh, itemId));
+    } catch (err) {
+      setItemErrors((prev) => ({ ...prev, [itemId]: err instanceof Error ? err.message : String(err) }));
+    } finally {
+      setReevaluating(null);
+    }
+  }
+
+  const failedFetches = result.fetched.filter((f) => f.error);
+
+  return (
+    <section className="space-y-5">
+      <div className="flex flex-wrap items-center gap-3">
+        <h2 className="text-xl font-semibold tracking-tight">Resultado</h2>
+        <span className="text-sm text-muted-foreground">
+          {result.poderLabel} · {result.scope.items} itens · {result.fetched.length} páginas analisadas
+        </span>
+        <div className="ml-auto flex gap-2">
+          <Button type="button" size="sm" onClick={exportMarkdown} disabled={busy || isLive}>
+            <Download />
+            Exportar Markdown
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            disabled={isLive}
+            onClick={() => download(`avaliacao-serigy-${host}-${stamp}.json`, JSON.stringify(result, null, 2), 'application/json')}
+          >
+            <FileJson />
+            JSON
+          </Button>
+        </div>
+      </div>
+      {exportError && (
+        <Alert variant="destructive">
+          <CircleAlert />
+          <AlertDescription>{exportError}</AlertDescription>
+        </Alert>
+      )}
+
+      {progress && isLive && (
+        <Card size="sm" role="status" aria-live="polite" className="border-blue-200">
+          <CardContent className="space-y-2">
+            <div className="flex items-center gap-2 text-sm">
+              {running && <Spinner className="text-primary" />}
+              <span className="font-medium">
+                {running ? 'Analisando' : 'Interrompida'}: {progress.done} de {progress.total} itens concluídos
+              </span>
+              {onCancel && (
+                <Button type="button" size="xs" variant="outline" className="ml-auto bg-white" onClick={onCancel}>
+                  <X />
+                  Cancelar
+                </Button>
+              )}
+            </div>
+            <Progress value={progress.total ? (progress.done / progress.total) * 100 : 0} />
+            {running && lastFetched && (
+              <div className="break-all text-xs text-muted-foreground">
+                {result.fetched.length} página(s) baixada(s) · última: {lastFetched.url}
+                {lastFetched.error ? ` (${lastFetched.error})` : ''}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      <SummaryStats s={result.summary} />
+
+      <Alert
+        variant={result.invoker.found ? 'default' : 'destructive'}
+        className={result.invoker.found ? 'border-emerald-200 bg-emerald-50/80' : 'border-rose-200 bg-rose-50/80'}
+      >
+        {result.invoker.found ? <CircleCheck className="text-emerald-600" /> : <CircleAlert />}
+        <AlertTitle>Invoker</AlertTitle>
+        <AlertDescription>{result.invoker.message}</AlertDescription>
+      </Alert>
+
+      {result.warnings.length > 0 && (
+        <Alert className="border-amber-200 bg-amber-50/80">
+          <TriangleAlert className="text-amber-600" />
+          <AlertTitle>
+            Avisos e falhas ({result.warnings.length})
+            {failedFetches.length > 0 && ` · ${failedFetches.length} página(s) com erro`}
+          </AlertTitle>
+          <AlertDescription>
+            {/* Lista rolável: pode haver dezenas de falhas */}
+            <ScrollArea className="mt-1 max-h-48 rounded-md border bg-white/80">
+              <ul className="space-y-1.5 p-2 text-xs">
+                {result.warnings.map((w) => (
+                  <li key={w} className="break-all">
+                    {w}
+                  </li>
+                ))}
+              </ul>
+            </ScrollArea>
+          </AlertDescription>
+        </Alert>
+      )}
+
+      <div className="flex flex-wrap gap-2">
+        {(['all', 'missing', 'warning', 'empty', 'ok'] as const).map((f) => (
+          <Button key={f} type="button" size="sm" variant={filter === f ? 'default' : 'outline'} className={filter === f ? '' : 'bg-white'} onClick={() => setFilter(f)}>
+            {f === 'all' ? 'Todos' : TONE[f].label}
+          </Button>
+        ))}
+      </div>
+
+      <div className="space-y-3">
+        {result.pages.map((page) => {
+          const sections = page.sections
+            .map((s) => ({ ...s, items: s.items.filter((i) => filter === 'all' || (!pending?.has(i.id) && i.status === filter)) }))
+            .filter((s) => s.items.length > 0);
+          if (sections.length === 0) return null;
+
+          const allItems = page.sections.flatMap((s) => s.items);
+          const pendingCount = allItems.filter((i) => pending?.has(i.id)).length;
+          const hasRunning = allItems.some((i) => pending?.get(i.id) === 'running');
+          const isOpen = openPages[page.id] ?? hasRunning;
+
+          return (
+            <Collapsible
+              key={page.id}
+              open={isOpen}
+              onOpenChange={(o) => setOpenPages((prev) => ({ ...prev, [page.id]: o }))}
+              className={cn('overflow-hidden rounded-xl border border-l-4 bg-card shadow-sm', pageTone(page, pendingCount))}
+            >
+              <CollapsibleTrigger className="flex w-full flex-wrap items-center gap-2 p-3.5 text-left font-medium hover:bg-muted/60">
+                <ChevronRight className={cn('size-4 shrink-0 text-muted-foreground transition-transform', isOpen && 'rotate-90')} />
+                {page.number}. {page.title}
+                <code className="text-xs font-normal text-muted-foreground">{page.id}</code>
+                {hasRunning && <Spinner className="text-primary" />}
+                <span className="ml-auto text-sm font-normal text-muted-foreground">
+                  {pendingCount > 0
+                    ? `${allItems.length - pendingCount}/${allItems.length} concluídos`
+                    : `${page.summary.score}% · ${page.summary.ok + page.summary.empty}/${page.summary.total}`}
+                </span>
+                {!isLive && !page.schemaFound && <Badge variant="destructive">schema ausente</Badge>}
+              </CollapsibleTrigger>
+              <CollapsibleContent>
+                <div className="space-y-5 border-t bg-card/60 p-4">
+                  <a href={page.docUrl} target="_blank" rel="noreferrer" className="text-xs text-primary hover:underline">
+                    Documentação oficial
+                  </a>
+                  {sections.map((s) => (
+                    <div key={s.id} className="space-y-2">
+                      <div>
+                        <h3 className="text-sm font-semibold">
+                          {s.id}. {s.title}
+                        </h3>
+                        {s.notes.map((n) => (
+                          <p key={n} className="text-xs text-muted-foreground">
+                            {n}
+                          </p>
+                        ))}
+                      </div>
+                      <div className="space-y-2">
+                        {s.items.map((i) => {
+                          const wait = pending?.get(i.id);
+                          if (wait) {
+                            // Ainda sem resultado: mostra que está na fila / sendo analisado.
+                            const t = PENDING_TONE[wait];
+                            return (
+                              <div key={i.id} aria-busy={wait === 'running'} className={cn('flex items-start gap-3 rounded-xl border p-3', t.row)}>
+                                <span className="w-14 shrink-0 text-sm text-muted-foreground">{i.id}</span>
+                                <div className={cn('min-w-0 flex-1 text-sm', wait === 'skipped' && 'text-muted-foreground')}>
+                                  {i.descricao}
+                                  <div className="text-xs text-muted-foreground">
+                                    <code>{i.atributo}</code>
+                                  </div>
+                                </div>
+                                <Badge className={cn('border-transparent', t.chip)}>
+                                  {wait === 'running' && <Spinner />}
+                                  {t.label}
+                                </Badge>
+                              </div>
+                            );
+                          }
+
+                          const tone = TONE[i.status];
+                          const StatusIcon = tone.icon;
+                          const hasDetails = i.status === 'missing' || i.status === 'warning';
+                          const detailsOpen = openItems[i.id] ?? false; // detalhes sempre começam fechados
+                          const iframes = (i.loadedVia ?? []).filter((v) => v.kind === 'iframe');
+                          const links = (i.loadedVia ?? []).filter((v) => v.kind !== 'iframe');
+                          return (
+                            <Collapsible
+                              key={i.id}
+                              open={detailsOpen}
+                              onOpenChange={(o) => setOpenItems((prev) => ({ ...prev, [i.id]: o }))}
+                              className={cn('rounded-xl border p-3 transition-colors', tone.row)}
+                            >
+                              <div className="flex items-start gap-3">
+                                <StatusIcon className={cn('mt-0.5 size-5 shrink-0', tone.iconClass)} />
+                                <span className="w-14 shrink-0 text-sm text-muted-foreground">{i.id}</span>
+                                <div className="min-w-0 flex-1 text-sm">
+                                  <div className="font-medium">{i.descricao}</div>
+                                  <div className="text-xs text-muted-foreground">
+                                    <code>{i.atributo}</code> · {i.message}
+                                  </div>
+                                  <div className="break-all text-xs text-muted-foreground">
+                                    URL analisada: <UrlList urls={i.analyzedUrls} />
+                                  </div>
+
+                                  {/* Alerta do iframe junto do item que depende dele */}
+                                  {iframes.map((v) => {
+                                    const where = page.iframes.find((f) => f.target === v.url)?.pageUrl;
+                                    return (
+                                      <div
+                                        key={v.url}
+                                        className="mt-2 flex items-start gap-2 break-all rounded-lg border border-violet-200 bg-violet-50 p-2 text-xs text-violet-900 dark:border-violet-900 dark:bg-violet-950/40 dark:text-violet-200"
+                                      >
+                                        <Frame className="mt-0.5 size-4 shrink-0" />
+                                        <span>
+                                          Esta página usa <strong>iframe</strong> com serigyLink: o conteúdo avaliado é <code>{v.url}</code>
+                                          {where ? ` (iframe em ${where})` : ''}.
+                                        </span>
+                                      </div>
+                                    );
+                                  })}
+                                  {links.map((v) => (
+                                    <div key={v.url} className="mt-1 break-all text-xs text-violet-700 dark:text-violet-300">
+                                      Via serigyLink → avaliado: {v.url}
+                                    </div>
+                                  ))}
+                                  {itemErrors[i.id] && <p className="mt-1 text-xs text-destructive">{itemErrors[i.id]}</p>}
+                                </div>
+
+                                <div className="flex shrink-0 flex-col items-end gap-1.5">
+                                  <Badge className={cn('border-transparent', tone.chip)}>{tone.label}</Badge>
+                                  <Button
+                                    type="button"
+                                    size="xs"
+                                    variant="outline"
+                                    className="bg-white/80"
+                                    onClick={() => reevaluate(i.id)}
+                                    disabled={reevaluating !== null || isLive}
+                                  >
+                                    {reevaluating === i.id ? <Spinner /> : <RefreshCw />}
+                                    {reevaluating === i.id ? 'Reavaliando…' : 'Reavaliar'}
+                                  </Button>
+                                  {hasDetails && (
+                                    <CollapsibleTrigger className="flex items-center gap-1 rounded-md px-1.5 py-0.5 text-xs text-primary hover:bg-white/70">
+                                      <ChevronRight className={cn('size-3.5 transition-transform', detailsOpen && 'rotate-90')} />
+                                      Detalhes
+                                    </CollapsibleTrigger>
+                                  )}
+                                </div>
+                              </div>
+                              {hasDetails && (
+                                <CollapsibleContent>
+                                  <div className="mt-3">
+                                    <ItemDetails item={i} page={page} section={s} />
+                                  </div>
+                                </CollapsibleContent>
+                              )}
+                            </Collapsible>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </CollapsibleContent>
+            </Collapsible>
+          );
+        })}
+      </div>
+    </section>
+  );
+}

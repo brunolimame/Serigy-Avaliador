@@ -12,9 +12,8 @@
 
 | Item | Critério(s) | Descrição | Atributo | Valor | 
 | 2.1.1 | 2.1 | Estrutura Organizacional | estruturaOrganizacional | Variável |
-|  |
 | 2.1.2 | 2.1 | Norma que instui/altera a estrutura organizacional | normaEstruturaOrganizacional | Variável |
-|  | 2.1.3 2.2 Competências competencias Texto 
+| 2.1.3 | 2.2 | Competências | competencias | Texto |
 | 2.1.4 | 2.3 | Nome dos atuais responsáveis pela gestão da Unidade | responsaveis | Texto | 
 | 2.1.5 | 2.4 | Endereços atuais da Unidade | enderecos | Texto | 
 | 2.1.6 | 2.4 | Telefones atuais da Unidade | telefones | Texto | 
