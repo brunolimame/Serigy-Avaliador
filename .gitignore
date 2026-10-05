@@ -3,3 +3,8 @@ dist/
 *.log
 .env
 .DS_Store
+
+apps/api/.browser/
+chrome-headless-shell-*.zip
+
+apps/api/data/

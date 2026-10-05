@@ -132,6 +132,44 @@ export interface EvaluationRequest {
    * Padrão: `false`.
    */
   tryDocumentedCase?: boolean;
+  /**
+   * Como as páginas são obtidas: `browser` (padrão) abre um navegador real e executa o JavaScript;
+   * `http` baixa só o HTML (mais rápido, não vê conteúdo montado por script).
+   */
+  renderer?: Renderer;
+  /** Nome do portal cadastrado (só para identificar a avaliação no resultado e no relatório). */
+  portalNome?: string;
+  portalAmbiente?: Ambiente;
+}
+
+export type Renderer = 'browser' | 'http';
+
+// ---------------------------------------------------------------------------
+// Portais cadastrados (SQLite)
+// ---------------------------------------------------------------------------
+
+/** Ambiente do endereço cadastrado. */
+export type Ambiente = 'producao' | 'desenvolvimento';
+
+export const AMBIENTES: Array<{ id: Ambiente; label: string }> = [
+  { id: 'producao', label: 'Produção' },
+  { id: 'desenvolvimento', label: 'Desenvolvimento' },
+];
+
+export interface PortalInput {
+  /** Nome para identificar o portal na lista (ex.: "Prefeitura de Aracaju"). */
+  nome: string;
+  /** URL raiz do portal da transparência (`[Portal da Transparencia]` da documentação). */
+  url: string;
+  poder: PoderId;
+  /** O endereço é de produção ou de desenvolvimento/homologação? */
+  ambiente: Ambiente;
+}
+
+export interface Portal extends PortalInput {
+  id: number;
+  criadoEm: string;
+  atualizadoEm: string;
 }
 
 /**
@@ -162,6 +200,11 @@ export interface ItemResult {
   analyzedUrls: string[];
   /** Presente quando o item depende de serigyLink: o tipo do elemento (iframe ou outro) e a URL avaliada. */
   loadedVia?: Array<{ kind: 'iframe' | 'serigyLink'; url: string }>;
+  /**
+   * Validação do schema do item: `esperado` (da documentação), `encontrado` (valor de serigySchema no HTML,
+   * quando o item foi achado) e `confere` (o endereço completo corresponde ao esperado).
+   */
+  schema: { esperado: string; encontrado?: string; confere: boolean };
   /** Até 3 trechos de HTML que comprovam o achado. */
   evidence: Array<{ pageUrl: string; snippet: string }>;
 }
@@ -229,6 +272,8 @@ export interface InvokerCheck {
 
 export interface EvaluationResult {
   url: string;
+  portalNome?: string;
+  portalAmbiente?: Ambiente;
   poder: PoderId;
   poderLabel: string;
   startedAt: string;
@@ -240,7 +285,7 @@ export interface EvaluationResult {
   /** Avisos gerais (ex.: conteúdo dinâmico não renderizado). */
   warnings: string[];
   /** Parâmetros de rastreio usados (reaproveitados ao reavaliar um item). */
-  crawl: { maxPages: number; tryDocumentedCase: boolean };
+  crawl: { maxPages: number; tryDocumentedCase: boolean; renderer: Renderer };
   summary: Summary;
   pages: PageResult[];
 }
@@ -294,11 +339,13 @@ export interface PlanPage {
 /** Tudo o que será avaliado, enviado antes de qualquer análise (itens "aguardando"). */
 export interface EvaluationPlan {
   url: string;
+  portalNome?: string;
+  portalAmbiente?: Ambiente;
   poder: PoderId;
   poderLabel: string;
   startedAt: string;
   scope: { mode: 'todos' | 'parcial'; pages: number; items: number };
-  crawl: { maxPages: number; tryDocumentedCase: boolean };
+  crawl: { maxPages: number; tryDocumentedCase: boolean; renderer: Renderer };
   pages: PlanPage[];
 }
 

@@ -73,7 +73,7 @@ export function buildView(live: Live): LiveView {
         if (done) return done;
         pending.set(i.id, frozen ? 'skipped' : running.has(i.id) ? 'running' : 'waiting');
         // Marcador: não entra em nenhum resumo (ver `finished` abaixo).
-        return { ...i, sectionId: s.id, status: 'missing', message: '', expected: '', analyzedUrls: [], evidence: [] };
+        return { ...i, sectionId: s.id, status: 'missing', message: '', expected: '', schema: { esperado: p.schemaUrl, confere: false }, analyzedUrls: [], evidence: [] };
       }),
     }));
     const finished = sections.flatMap((s) => s.items).filter((i) => !pending.has(i.id));
@@ -96,6 +96,8 @@ export function buildView(live: Live): LiveView {
   return {
     result: {
       url: plan.url,
+      portalNome: plan.portalNome,
+      portalAmbiente: plan.portalAmbiente,
       poder: plan.poder,
       poderLabel: plan.poderLabel,
       startedAt: plan.startedAt,

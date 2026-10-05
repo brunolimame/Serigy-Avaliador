@@ -1,4 +1,4 @@
-import { compareIds, type EvaluationResult, type FetchOrigin, type ItemResult, type ItemStatus, type Summary } from '@serigy/shared';
+import { AMBIENTES, compareIds, type EvaluationResult, type FetchOrigin, type ItemResult, type ItemStatus, type Summary } from '@serigy/shared';
 
 const ICON: Record<ItemStatus, string> = { ok: '✅', warning: '⚠️', empty: '➖', missing: '❌' };
 const LABEL: Record<ItemStatus, string> = {
@@ -58,7 +58,8 @@ const fmtDate = (iso: string): string => new Date(iso).toLocaleString('pt-BR', {
 export function renderMarkdown(r: EvaluationResult): string {
   const out: string[] = [];
   out.push(`# Relatório de avaliação Serigy — PNTP 2026`, '');
-  out.push(`- **Portal avaliado:** ${r.url}`);
+  out.push(`- **Portal avaliado:** ${r.portalNome ? `${r.portalNome} — ` : ''}${r.url}`);
+  if (r.portalAmbiente) out.push(`- **Ambiente:** ${AMBIENTES.find((a) => a.id === r.portalAmbiente)?.label ?? r.portalAmbiente}`);
   out.push(`- **Poder/esfera:** ${r.poderLabel} (requisitos comuns + específicos)`);
   out.push(`- **Avaliado em:** ${fmtDate(r.finishedAt)}`);
   out.push(
@@ -110,6 +111,9 @@ export function renderMarkdown(r: EvaluationResult): string {
       out.push(`- **Critério(s):** ${i.criterios.join(', ') || '—'}`);
       if (s.caminhoUrl) out.push(`- **Caminho sugerido:** ${code(s.caminhoUrl)}`);
       out.push(`- **Esperado:** ${i.expected}`);
+      out.push(
+        `- **Schema:** ${i.schema.confere ? '✅ confere' : '❌ não confere'} — esperado ${code(i.schema.esperado)}; encontrado ${i.schema.encontrado ? code(i.schema.encontrado) : 'nenhum'}`,
+      );
       out.push(`- **URL analisada:** ${urlLinks(i.analyzedUrls).split('<br>').join(', ')}`);
       for (const v of i.loadedVia ?? []) {
         out.push(`- **${v.kind === 'iframe' ? 'Carregado via iframe' : 'Via serigyLink'}:** serigyLink avaliado ${v.url}`);

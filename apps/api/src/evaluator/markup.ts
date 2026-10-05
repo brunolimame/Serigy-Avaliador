@@ -14,6 +14,8 @@ export interface MarkupElement {
   item?: string;
   /** schema (normalizado) do próprio elemento ou do ancestral mais próximo */
   schema?: string;
+  /** valor original de serigySchema do elemento ou do ancestral (para conferir o endereço completo) */
+  schemaRaw?: string;
   /** valor de serigyValue */
   value?: string;
   /** valor de serigyEmpty (string vazia = presente sem motivo) */
@@ -79,6 +81,19 @@ export function normalizeSchema(raw: string): string {
     /* não é URL absoluta: usa como veio */
   }
   return path.toLowerCase().replace(/^\/2026(?=\/)/, '').replace(/\/+$/, '');
+}
+
+/**
+ * Forma canônica do ENDEREÇO COMPLETO do schema, para conferir se o encontrado corresponde ao esperado:
+ * ignora caixa, espaços, barra final e o prefixo de versão `/2026`, mas mantém protocolo e host.
+ * (`normalizeSchema` compara só o caminho; esta confere também o host.)
+ */
+export function canonicalSchema(raw: string): string {
+  return raw
+    .trim()
+    .toLowerCase()
+    .replace(/\/+$/, '')
+    .replace(/^(https?:\/\/[^/]+)\/2026(?=\/)/, '$1');
 }
 
 function resolveUrl(raw: string | undefined, base: string): string | undefined {
@@ -165,6 +180,7 @@ export function extractMarkup(html: string, baseUrl: string, pageUrl: string = b
       tag,
       item: el.attr('serigyitem')?.trim(),
       schema: owner.length ? normalizeSchema(owner.attr('serigyschema') ?? '') : undefined,
+      schemaRaw: owner.length ? (owner.attr('serigyschema') ?? '').trim() : undefined,
       value: el.attr('serigyvalue'),
       empty: el.attr('serigyempty'),
       link: el.attr('serigylink'),

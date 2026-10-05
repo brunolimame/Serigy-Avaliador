@@ -14,7 +14,7 @@ em Markdown.
 |---|---|
 | Gerenciador de pacotes | pnpm (workspace) |
 | UI (`apps/web`) | TypeScript, React 19, Tailwind CSS 4, Vite, **shadcn/ui** (estilo `base-nova`, Base UI + lucide-react) |
-| API (`apps/api`) | Node 22, Express 5, TypeScript (executado com `tsx`), cheerio, zod |
+| API (`apps/api`) | Node 22, Express 5, TypeScript (executado com `tsx`), cheerio, zod, playwright-core + navegador headless embutido |
 | Testes | vitest (API) |
 
 ## Como usar
@@ -39,7 +39,8 @@ packages/shared/           tipos + lista de poderes (PODERES), usados por API e 
 apps/api/
   scripts/build-catalog.ts docs -> src/catalog/catalog.json (sem rede)
   src/catalog/             parse-docs.ts (parser), load.ts, catalog.json (gerado, versionado)
-  src/evaluator/           loader.ts, collector.ts, paths.ts, markup.ts, checks.ts, evaluate.ts
+  src/evaluator/           loader.ts, browser-loader.ts, loader-factory.ts, collector.ts, paths.ts, markup.ts, checks.ts, evaluate.ts
+  src/db/                  SQLite: database.ts (migrações), portais.ts (cadastro), index.ts
   src/report/markdown.ts   relatório em markdown
   src/app.ts               rotas Express
   test/                    testes
@@ -98,6 +99,76 @@ URL do portal ──▶ collector ──▶ markup (serigy*) ──▶ evaluate 
   `<pre>` com `max-h-64 overflow-auto` (rolagem vertical e horizontal). O `ScrollArea` foi ajustado com
   `max-h-[inherit]` no viewport para funcionar com altura máxima.
 
+## Portais cadastrados (SQLite)
+
+Os portais a avaliar ficam cadastrados em um banco **SQLite**, cada um com **nome, URL, poder e ambiente**
+(produção ou desenvolvimento). Na tela basta selecionar o portal; há também a opção "URL avulsa".
+
+- **Banco:** `apps/api/data/avaliador.sqlite` (criado sozinho; fora do Git). `DATABASE_PATH` troca o arquivo.
+  Usa o SQLite embutido do Node (`node:sqlite`, **Node ≥ 22.13**, imprime um `ExperimentalWarning` inofensivo):
+  nada nativo para instalar. Modo WAL (junto do arquivo aparecem `-wal` e `-shm`; copie os três ou pare a API antes
+  de copiar o banco).
+- **Código:** `apps/api/src/db/` — `database.ts` (abre o arquivo e aplica as migrações), `portais.ts` (`PortaisRepo`:
+  `list/get/create/update/remove`, validações e `PortalError`), `index.ts` (`defaultPortais()`, aberto na 1ª utilização).
+- **Esquema:** tabela `portais(id, nome, url, url_chave UNIQUE, poder, ambiente, criado_em, atualizado_em)`.
+  A unicidade usa a URL normalizada (host e caminho em minúsculas, sem barra final e sem âncora): `https://X.gov.br/` e
+  `https://x.gov.br` são o mesmo portal (HTTP 409 ao repetir).
+- **Migrações** por `PRAGMA user_version`: acrescente um item em `MIGRATIONS` (`database.ts`) e nunca altere os já
+  publicados. v1 cria a tabela; v2 acrescenta `ambiente` (os portais antigos viram "produção").
+- **Ambiente** (`producao` | `desenvolvimento`; omitido = produção) identifica o endereço, e a interface o mostra em
+  todo lugar: selo verde "Produção" (ícone de servidor) ou âmbar "Desenvolvimento" (ícone de frasco) na lista, no
+  seletor e na avaliação; faixa colorida "AMBIENTE DE PRODUÇÃO/DESENVOLVIMENTO" com o nome e a URL no topo do resultado;
+  e linha "Ambiente" no relatório Markdown. O avaliador em si não muda de comportamento por ambiente.
+- **API:** `GET /api/portais`, `POST /api/portais`, `PUT /api/portais/:id`, `DELETE /api/portais/:id` (204).
+  Corpo: `{ "nome", "url", "poder", "ambiente" }`. Erros: 400 (nome, URL ou poder inválidos), 404, 409 (URL repetida).
+  `POST /api/evaluate*` aceita `portalNome` e `portalAmbiente` (só identificam a avaliação no resultado e no relatório).
+- **Interface:** "Gerenciar portais" (cabeçalho) abre o cadastro (novo/editar/excluir com confirmação); o último portal
+  escolhido é lembrado no navegador (`localStorage`).
+
+## Navegador embutido (renderização de páginas reativas)
+
+Por padrão (`renderer: "browser"`) cada página é aberta em um **navegador real headless** (Chromium via
+`playwright-core`) e a análise usa o DOM **já renderizado**. Assim páginas reativas, que só mostram os resultados
+depois de carregar JavaScript, são avaliadas como o usuário as vê. `renderer: "http"` (checkbox desmarcado na UI)
+só baixa o HTML: é mais rápido, mas não vê conteúdo montado por script.
+
+**Sem programa instalado na máquina.** O navegador faz parte da API (ordem em `browser-loader.ts`):
+1. `BROWSER_EXECUTABLE_PATH`, se definido;
+2. **navegador embutido** em `apps/api/.browser/`, extraído do `chrome-headless-shell-win64.zip` (≈ 115 MiB, ≈ 271 MB
+   extraído) que fica na raiz do projeto — sem rede;
+3. Chromium baixado pelo Playwright para `node_modules/playwright-core/.local-browsers` (`PLAYWRIGHT_BROWSERS_PATH=0`);
+4. só como reserva: Chrome ou Edge instalados no sistema;
+5. se nada abrir, cai para `http` e o resultado traz um aviso.
+
+O `pnpm install` roda `scripts/install-browser.mjs` (`postinstall`): extrai o zip local, ou, não havendo zip, baixa o
+Chromium (com repasse por espelho local usando o `fetch` do Node, pois o downloader do Playwright estoura o tempo em
+algumas redes). Falhar nesse passo não quebra a instalação. Para refazer: `pnpm --filter @serigy/api browser:install`.
+`SERIGY_SKIP_BROWSER_DOWNLOAD=1` pula a preparação; `SERIGY_BROWSER_ZIP=<caminho>` aponta outro zip. O zip e a pasta
+`.browser` estão no `.gitignore` (passam do limite de 100 MB do Git). Para outro sistema operacional, use o
+`chrome-headless-shell-<plataforma>.zip` correspondente (Chrome for Testing, versão 153) ou deixe o instalador baixar.
+
+**O que o navegador faz** (`apps/api/src/evaluator/browser-loader.ts`):
+- espera o carregamento e a rede ficar ociosa (até 8 s) antes de ler o DOM;
+- **dispara os `serigyExecuteWaitSection`**: clica no elemento e espera o `serigyLoadSection` correspondente (até 20
+  por página, 5 s cada), como o `definicoes.md` descreve; **nunca clica em itens de exportação** (`salvarRelatorio`) e
+  não aceita downloads, então nada é exportado;
+- imagens, mídia e fontes não são baixadas (não mudam a marcação; menos tráfego no portal).
+
+**Acesso sem ser tratado como robô** (o objetivo é analisar o portal sem bloqueios indevidos):
+- User-Agent de um Chrome comum (o modo headless acrescenta "HeadlessChrome", que denuncia automação), sem a flag
+  `navigator.webdriver`, idioma `pt-BR`, fuso `America/Maceio`, viewport de desktop, cabeçalho `Accept-Language`;
+- poucas abas simultâneas (3 seções por vez) e **nova tentativa com espera em 429/503**;
+- `BROWSER_USER_AGENT` troca o User-Agent.
+- **Limite honesto:** isso não burla CAPTCHA nem desafios de WAF. Quando o portal bloqueia (HTTP 403/429 com página
+  "Access Denied", "Just a moment", CAPTCHA…), o item sai com a mensagem "o portal parece bloquear acessos
+  automatizados"; a solução correta é **liberar o IP/UA do avaliador** com o responsável pelo portal.
+- Certificados HTTPS incompletos são aceitos (`ignoreHTTPSErrors`), para que portais públicos mal configurados continuem
+  analisáveis.
+
+Os testes (`test/browser.test.ts`) sobem um portal falso local e provam: conteúdo montado por JS é visto (e o modo
+`http` não o vê), o clique de `serigyExecuteWaitSection` carrega a seção, itens de exportação não são clicados, o UA não
+tem "Headless", 403 e 429 são tratados e o navegador usado é o embutido. Sem navegador no ambiente o grupo é ignorado.
+
 ## Poderes e requisitos aplicáveis
 
 Definidos em `packages/shared/src/index.ts` (`PODERES`). Sempre `comum` + pasta(s) do poder:
@@ -139,6 +210,20 @@ Status de cada item:
 - **Ordem**: páginas pelo número da página na matriz (o número do `# N. Título`; ex.: Ouvidoria = 14), seções e
   itens numericamente por segmento (`4.1.2` antes de `4.1.10`), no catálogo/UI, no resultado e nas pendências do
   relatório (`compareIds` em `packages/shared`). Empates de número mantêm a ordem comum → pasta do poder.
+- **Validação do schema (esperado x encontrado)**: achar o `serigyItem` sob um schema de mesmo caminho não basta; o
+  **endereço completo** de `serigySchema` precisa corresponder ao da documentação (`canonicalSchema` em `markup.ts`:
+  ignora caixa, espaços, barra final e o prefixo `/2026`, mas confere protocolo e host). Cada item traz
+  `schema: { esperado, encontrado?, confere }`:
+  - confere → segue a avaliação normal; havendo ocorrências com schema exato e outras com schema errado, vale a exata;
+  - mesmo caminho, mas outro host ou protocolo (ex.: `https://outro.gov.br/comum/despesas.html`) → **Atenção**, com
+    "o schema não confere: encontrado X; esperado Y" (o item deixa de contar como atendido);
+  - item achado só sob schema de outro caminho → **Não encontrado**, informando o schema encontrado.
+  A UI mostra "Schema: ✓ confere / ✗ não confere" em cada item (e no painel Detalhes); o relatório traz a linha
+  "Schema" nas pendências.
+- **Cor do percentual de atendimento** (`apps/web/src/score.ts`, `scoreTone`): páginas, seções e o total usam
+  **vermelho abaixo de 40%**, **amarelo de 40% a menos de 100%** e **verde com 100%** (40% exato é amarelo). Aparece na
+  borda lateral e no selo da página, no selo da seção e no número do "Atendimento". Os itens individuais mantêm a cor
+  do próprio resultado (atendido, atenção, vazio declarado, não encontrado), pois cada item é atendido ou não.
 - **Histórico (`historicoExercicio`)**: o avaliador não verifica os 3 anos; se o schema da página tem um filtro por
   ano (um `<select>` dentro do schema com opções `20xx`), o item é dado como **atendido**, mesmo sem
   `serigyItem="historicoExercicio"` próprio (`YearFilter` em `markup.ts`, regra em `evaluate.ts`).
@@ -169,8 +254,9 @@ Status de cada item:
 
 ### Limitações conhecidas
 
-- **Análise estática**: o HTML é obtido por HTTP e não executa JavaScript. Conteúdo que só aparece após
-  `serigyExecuteWaitSection` (clique) não é visto; nesse caso o relatório avisa e os itens podem sair `missing`.
+- **Navegador x HTTP**: com `renderer: "browser"` (padrão) o JavaScript é executado e os `serigyExecuteWaitSection` são
+  clicados. Com `renderer: "http"` o HTML é baixado sem executar JavaScript, e o relatório avisa quando há conteúdo
+  que dependia de clique. Conteúdo que exige login, CAPTCHA ou interação além do `serigyExecuteWaitSection` não é visto.
 - **Caminhos da documentação**: como não há navegação por links, um item só é encontrado na URL do "Caminho URL"
   da sua seção (em minúsculas ou, com `tryDocumentedCase`, na grafia da documentação) ou no destino de um `serigyLink`. Se o portal publica a
   seção em outro endereço, o item sai `missing` com a URL tentada; use `serigyLink` (na página do caminho) para
@@ -199,7 +285,8 @@ Corpo de `POST /api/evaluate`:
   "pages": ["comum/despesas"],
   "items": ["4.1.1", "4.1.2"],
   "maxPages": 200,
-  "tryDocumentedCase": false
+  "tryDocumentedCase": false,
+  "renderer": "browser"
 }
 ```
 
@@ -272,10 +359,10 @@ Adicione uma função em `VALIDATORS` (`checks.ts`) com o nome do tipo exatament
 ### Mudar o relatório
 Edite `src/report/markdown.ts`; a UI só chama `POST /api/report`, não há template duplicado.
 
-### Renderizar JavaScript (itens carregados por clique)
-O avaliador só depende da interface `PageLoader` (`loader.ts`). Crie, por exemplo, um `PlaywrightLoader`
-que abra a página, clique nos elementos `[serigyExecuteWaitSection]`, aguarde o `serigyLoadSection`
-correspondente e devolva `page.content()`; injete-o em `evaluate(req, { loader })` ou em `createApp({ loader })`.
+### Trocar o carregador de páginas
+O avaliador só depende da interface `PageLoader` (`loader.ts`: `load(url)` e `close()` opcional). `loader-factory.ts`
+escolhe `BrowserLoader` ou `HttpLoader`; para outro mecanismo, implemente `PageLoader` e injete-o em
+`evaluate(req, { loader })` ou `createApp({ loader })` (é assim que os testes usam um loader falso).
 
 ## Testes
 

@@ -14,6 +14,8 @@ export interface LoadedPage {
 
 export interface PageLoader {
   load(url: string): Promise<LoadedPage>;
+  /** Libera recursos (ex.: contexto do navegador). Chamado ao fim de cada avaliação. */
+  close?(): Promise<void>;
 }
 
 export interface HttpLoaderOptions {

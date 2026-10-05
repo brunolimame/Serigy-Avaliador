@@ -8,12 +8,16 @@
     "start": "tsx src/index.ts",
     "catalog": "tsx scripts/build-catalog.ts",
     "typecheck": "tsc -p tsconfig.json",
-    "test": "vitest run"
+    "test": "vitest run",
+    "postinstall": "node scripts/install-browser.mjs",
+    "browser:install": "node scripts/install-browser.mjs"
   },
   "dependencies": {
     "@serigy/shared": "workspace:*",
     "cheerio": "^1.2.0",
     "express": "^5.2.1",
+    "extract-zip": "^2.0.1",
+    "playwright-core": "^1.63.0",
     "zod": "^4.6.5"
   },
   "devDependencies": {
@@ -22,5 +26,8 @@
     "tsx": "^4.23.15",
     "typescript": "^5.9.3",
     "vitest": "^5.0.3"
+  },
+  "engines": {
+    "node": ">=22.13"
   }
 }

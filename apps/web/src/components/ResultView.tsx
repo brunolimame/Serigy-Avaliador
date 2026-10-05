@@ -16,7 +16,10 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import type { EvaluationResult, ItemResult, ItemStatus, PageResult, SectionResult, Summary } from '@serigy/shared';
+import { summarize } from '@serigy/shared';
 import { api, download } from '../api';
+import { SCORE_STYLE, scoreTone } from '../score';
+import { AMBIENTE_TONE } from './AmbienteBadge';
 import type { PendingState } from '../live';
 import { mergeReevaluated } from '../merge';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
@@ -87,7 +90,12 @@ function Stat({ label, value, icon: Icon, color }: { label: string; value: strin
 function SummaryStats({ s }: { s: Summary }) {
   return (
     <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
-      <Stat label="Atendimento" value={`${s.score}%`} icon={CircleCheck} color="text-primary" />
+      <Stat
+        label="Atendimento"
+        value={`${s.score}%`}
+        icon={CircleCheck}
+        color={s.total > 0 ? SCORE_STYLE[scoreTone(s.score)].text : 'text-primary'}
+      />
       <Stat label="Itens avaliados" value={s.total} icon={Clock} color="text-slate-700" />
       <Stat label="Atendidos" value={s.ok} icon={CircleCheck} color="text-emerald-700" />
       <Stat label="Atenção" value={s.warning} icon={TriangleAlert} color="text-amber-700" />
@@ -109,6 +117,45 @@ function UrlList({ urls }: { urls: string[] }) {
         </span>
       ))}
     </>
+  );
+}
+
+/** Selo do percentual de atendimento: < 40% vermelho, de 40% a < 100% amarelo, 100% verde. */
+function ScoreBadge({ summary }: { summary: Summary }) {
+  const tone = SCORE_STYLE[scoreTone(summary.score)];
+  return (
+    <Badge variant="outline" className={cn('font-medium tabular-nums', tone.badge)}>
+      {summary.score}% · {summary.ok + summary.empty}/{summary.total}
+    </Badge>
+  );
+}
+
+/** Percentual da seção; só aparece quando todos os itens dela já têm resultado. */
+function SectionScore({ items, pending }: { items: ItemResult[]; pending?: Map<string, PendingState> }) {
+  const finished = items.filter((i) => !pending?.has(i.id));
+  if (items.length === 0 || finished.length < items.length) return null;
+  return <ScoreBadge summary={summarize(finished)} />;
+}
+
+/** Validação do schema: esperado pela documentação x encontrado no HTML. */
+function SchemaLine({ item }: { item: ItemResult }) {
+  if (!item.schema.encontrado) return null;
+  return (
+    <div className="break-all text-xs text-muted-foreground">
+      Schema:{' '}
+      {item.schema.confere ? (
+        <span className="font-medium text-emerald-700">✓ confere</span>
+      ) : (
+        <span className="font-medium text-rose-700">✗ não confere</span>
+      )}{' '}
+      · encontrado <code>{item.schema.encontrado}</code>
+      {!item.schema.confere && (
+        <>
+          {' '}
+          · esperado <code>{item.schema.esperado}</code>
+        </>
+      )}
+    </div>
   );
 }
 
@@ -135,6 +182,10 @@ function ItemDetails({ item, page, section }: { item: ItemResult; page: PageResu
       </p>
       <p>
         <strong>Esperado:</strong> {item.expected}
+      </p>
+      <p>
+        <strong>Schema:</strong> {item.schema.confere ? '✓ confere' : '✗ não confere'} — esperado <code>{item.schema.esperado}</code>; encontrado{' '}
+        {item.schema.encontrado ? <code>{item.schema.encontrado}</code> : 'nenhum'}
       </p>
       {item.evidence.length > 0 && (
         <div>
@@ -170,9 +221,7 @@ function ItemDetails({ item, page, section }: { item: ItemResult; page: PageResu
 /** Cor da página (borda lateral e cabeçalho) conforme o pior resultado dos itens. */
 function pageTone(page: PageResult, pendingCount: number): string {
   if (pendingCount > 0) return 'border-l-blue-400';
-  if (page.summary.missing > 0) return 'border-l-rose-400';
-  if (page.summary.warning > 0) return 'border-l-amber-400';
-  return 'border-l-emerald-400';
+  return SCORE_STYLE[scoreTone(page.summary.score)].stripe;
 }
 
 interface Props {
@@ -225,6 +274,7 @@ export function ResultView({ result, onChange, pending, progress, onCancel }: Pr
         items: [itemId],
         maxPages: result.crawl.maxPages,
         tryDocumentedCase: result.crawl.tryDocumentedCase,
+        renderer: result.crawl.renderer,
       });
       onChange(mergeReevaluated(result, fresh, itemId));
     } catch (err) {
@@ -260,6 +310,33 @@ export function ResultView({ result, onChange, pending, progress, onCancel }: Pr
           </Button>
         </div>
       </div>
+      {/* Identificação do portal e do ambiente (produção/desenvolvimento) */}
+      {(result.portalNome || result.portalAmbiente) && (
+        <div
+          className={cn(
+            'flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border border-l-4 px-4 py-2.5 text-sm',
+            result.portalAmbiente ? AMBIENTE_TONE[result.portalAmbiente].banner : 'bg-muted/40',
+            result.portalAmbiente && AMBIENTE_TONE[result.portalAmbiente].stripe,
+          )}
+        >
+          {result.portalAmbiente &&
+            (() => {
+              const t = AMBIENTE_TONE[result.portalAmbiente];
+              const Icon = t.icon;
+              return (
+                <span className="flex items-center gap-1.5 font-semibold uppercase tracking-wide">
+                  <Icon className="size-4" />
+                  Ambiente de {t.label.toLowerCase()}
+                </span>
+              );
+            })()}
+          {result.portalNome && <span className="font-medium">{result.portalNome}</span>}
+          <a href={result.url} target="_blank" rel="noreferrer" className="break-all text-xs underline-offset-2 hover:underline sm:ml-auto">
+            {result.url}
+          </a>
+        </div>
+      )}
+
       {exportError && (
         <Alert variant="destructive">
           <CircleAlert />
@@ -359,9 +436,11 @@ export function ResultView({ result, onChange, pending, progress, onCancel }: Pr
                 <code className="text-xs font-normal text-muted-foreground">{page.id}</code>
                 {hasRunning && <Spinner className="text-primary" />}
                 <span className="ml-auto text-sm font-normal text-muted-foreground">
-                  {pendingCount > 0
-                    ? `${allItems.length - pendingCount}/${allItems.length} concluídos`
-                    : `${page.summary.score}% · ${page.summary.ok + page.summary.empty}/${page.summary.total}`}
+                  {pendingCount > 0 ? (
+                    `${allItems.length - pendingCount}/${allItems.length} concluídos`
+                  ) : (
+                    <ScoreBadge summary={page.summary} />
+                  )}
                 </span>
                 {!isLive && !page.schemaFound && <Badge variant="destructive">schema ausente</Badge>}
               </CollapsibleTrigger>
@@ -373,8 +452,9 @@ export function ResultView({ result, onChange, pending, progress, onCancel }: Pr
                   {sections.map((s) => (
                     <div key={s.id} className="space-y-2">
                       <div>
-                        <h3 className="text-sm font-semibold">
+                        <h3 className="flex flex-wrap items-center gap-2 text-sm font-semibold">
                           {s.id}. {s.title}
+                          <SectionScore items={page.sections.find((x) => x.id === s.id)?.items ?? []} pending={pending} />
                         </h3>
                         {s.notes.map((n) => (
                           <p key={n} className="text-xs text-muted-foreground">
@@ -426,6 +506,7 @@ export function ResultView({ result, onChange, pending, progress, onCancel }: Pr
                                   <div className="text-xs text-muted-foreground">
                                     <code>{i.atributo}</code> · {i.message}
                                   </div>
+                                  <SchemaLine item={i} />
                                   <div className="break-all text-xs text-muted-foreground">
                                     URL analisada: <UrlList urls={i.analyzedUrls} />
                                   </div>

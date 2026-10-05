@@ -1,4 +1,4 @@
-import type { CatalogResponse, EvaluationRequest, EvaluationResult, PoderInfo, StreamEvent } from '@serigy/shared';
+import type { CatalogResponse, EvaluationRequest, EvaluationResult, PoderInfo, Portal, PortalInput, StreamEvent } from '@serigy/shared';
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(path, init);
@@ -16,6 +16,18 @@ const json = (body: unknown): RequestInit => ({
 });
 
 export const api = {
+  portais: {
+    list: () => request<Portal[]>('/api/portais'),
+    create: (input: PortalInput) => request<Portal>('/api/portais', json(input)),
+    update: (id: number, input: PortalInput) => request<Portal>(`/api/portais/${id}`, { ...json(input), method: 'PUT' }),
+    async remove(id: number): Promise<void> {
+      const res = await fetch(`/api/portais/${id}`, { method: 'DELETE' });
+      if (!res.ok) {
+        const body = (await res.json().catch(() => null)) as { error?: string } | null;
+        throw new Error(body?.error ?? `Erro ${res.status}`);
+      }
+    },
+  },
   poderes: () => request<PoderInfo[]>('/api/poderes'),
   catalog: (poder: string) => request<CatalogResponse>(`/api/catalog?poder=${encodeURIComponent(poder)}`),
   evaluate: (req: EvaluationRequest) => request<EvaluationResult>('/api/evaluate', json(req)),

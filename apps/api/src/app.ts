@@ -5,6 +5,7 @@ import express, { type NextFunction, type Request, type Response } from 'express
 import { PODERES, type CatalogResponse, type StreamEvent } from '@serigy/shared';
 import { z } from 'zod';
 import { getPoder, loadCatalog, pagesForPoder } from './catalog/load';
+import { defaultPortais, PortalError, type PortaisRepo } from './db';
 import { evaluate, EvaluationError, prepareEvaluation, type EvaluateDeps, type PreparedEvaluation } from './evaluator/evaluate';
 import { renderMarkdown } from './report/markdown';
 
@@ -17,12 +18,66 @@ const evaluationSchema = z.object({
   items: z.array(z.string()).optional(),
   maxPages: z.number().int().min(1).max(200).optional(),
   tryDocumentedCase: z.boolean().optional(),
+  renderer: z.enum(['browser', 'http']).optional(),
+  portalNome: z.string().max(120).optional(),
+  portalAmbiente: z.enum(['producao', 'desenvolvimento']).optional(),
 });
 
-/** `deps` permite injetar loader/catálogo nos testes. */
-export function createApp(deps: EvaluateDeps = {}) {
+const portalSchema = z.object({
+  nome: z.string(),
+  url: z.string(),
+  poder: z.enum(poderIds),
+  ambiente: z.enum(['producao', 'desenvolvimento']).default('producao'),
+});
+
+export interface AppDeps extends EvaluateDeps {
+  /** Cadastro de portais (SQLite). Padrão: arquivo apps/api/data/avaliador.sqlite. */
+  portais?: PortaisRepo;
+}
+
+/** `deps` permite injetar loader/catálogo/banco nos testes. */
+export function createApp(deps: AppDeps = {}) {
   const app = express();
   app.use(express.json({ limit: '10mb' }));
+
+  // --- cadastro de portais (SQLite) --------------------------------------------------------------
+  const portais = () => deps.portais ?? defaultPortais();
+  const portalId = (raw: string | undefined): number => {
+    const id = Number(raw);
+    if (!Number.isInteger(id) || id < 1) throw new PortalError('Identificador de portal inválido', 400);
+    return id;
+  };
+  const portalBody = (body: unknown) => {
+    const parsed = portalSchema.safeParse(body);
+    if (!parsed.success) throw new PortalError(parsed.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; '), 400);
+    return parsed.data as Parameters<PortaisRepo['create']>[0];
+  };
+
+  app.get('/api/portais', (_req, res) => {
+    res.json(portais().list());
+  });
+  app.post('/api/portais', (req, res, next) => {
+    try {
+      res.status(201).json(portais().create(portalBody(req.body)));
+    } catch (err) {
+      next(err);
+    }
+  });
+  app.put('/api/portais/:id', (req, res, next) => {
+    try {
+      res.json(portais().update(portalId(req.params.id), portalBody(req.body)));
+    } catch (err) {
+      next(err);
+    }
+  });
+  app.delete('/api/portais/:id', (req, res, next) => {
+    try {
+      portais().remove(portalId(req.params.id));
+      res.status(204).end();
+    } catch (err) {
+      next(err);
+    }
+  });
 
   app.get('/api/health', (_req, res) => {
     res.json({ ok: true, generatedAt: loadCatalog().generatedAt });
@@ -119,6 +174,10 @@ export function createApp(deps: EvaluateDeps = {}) {
   }
 
   app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
+    if (err instanceof PortalError) {
+      res.status(err.status).json({ error: err.message });
+      return;
+    }
     if (err instanceof EvaluationError) {
       res.status(err.status).json({ error: err.message });
       return;

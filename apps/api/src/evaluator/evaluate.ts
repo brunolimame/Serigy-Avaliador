@@ -16,8 +16,9 @@ import { summarize } from '@serigy/shared';
 import { getPoder, loadCatalog, pagesForPoder } from '../catalog/load';
 import { describeExpected, validateType } from './checks';
 import { PageStore, urlKey } from './collector';
-import { HttpLoader, type PageLoader } from './loader';
-import { normalizeSchema, type Delegation, type MarkupElement, type PageMarkup, type YearFilter } from './markup';
+import type { PageLoader } from './loader';
+import { createLoader, type CreatedLoader } from './loader-factory';
+import { canonicalSchema, normalizeSchema, type Delegation, type MarkupElement, type PageMarkup, type YearFilter } from './markup';
 import { documentedUrl } from './paths';
 
 /** Item "Histórico (últimos 3 anos)": atendido quando existe filtro por ano no schema. */
@@ -108,7 +109,21 @@ function evaluateCore(item: CatalogItem, sectionId: string, page: CatalogPage, s
     const [kind, ...rest] = v.split('|');
     return { kind: kind as 'iframe' | 'serigyLink', url: rest.join('|') };
   });
-  const done = (r: Omit<ItemResult, 'loadedVia'>): ItemResult => (loadedVia.length ? { ...r, loadedVia } : r);
+  // Validação do schema: o endereço completo encontrado no HTML deve corresponder ao esperado pela documentação.
+  const expectedSchema = canonicalSchema(page.schemaUrl);
+  const schema: ItemResult['schema'] = { esperado: page.schemaUrl, confere: false };
+  let schemaMismatch = false;
+  const done = (r: Omit<ItemResult, 'loadedVia' | 'schema'>): ItemResult => {
+    let out: ItemResult = { ...r, schema, ...(loadedVia.length ? { loadedVia } : {}) };
+    if (schemaMismatch && (out.status === 'ok' || out.status === 'empty')) {
+      out = {
+        ...out,
+        status: 'warning',
+        message: `Item encontrado, mas o schema não confere: encontrado "${schema.encontrado}"; esperado "${page.schemaUrl}". ${out.message}`,
+      };
+    }
+    return out;
+  };
 
   // A página do caminho da documentação não pôde ser baixada.
   const failure = ctx.failed.get(sectionKey);
@@ -128,7 +143,16 @@ function evaluateCore(item: CatalogItem, sectionId: string, page: CatalogPage, s
   const targetHits = inSchema.filter(atTarget);
   // O próprio elemento que delega (item + serigyLink) não é a evidência do item.
   const direct = inSchema.filter((e) => !atTarget(e) && !(itemLevel && e.link));
-  const hits = targetHits.length > 0 ? targetHits : direct;
+  let hits = targetHits.length > 0 ? targetHits : direct;
+
+  // Mesmo caminho de schema não basta: o endereço completo (protocolo e host) também precisa conferir.
+  if (hits.length > 0) {
+    const exact = hits.filter((e) => canonicalSchema(e.schemaRaw ?? '') === expectedSchema);
+    schemaMismatch = exact.length === 0;
+    schema.encontrado = unique((schemaMismatch ? hits : exact).map((e) => e.schemaRaw ?? '')).join(', ');
+    schema.confere = !schemaMismatch;
+    if (!schemaMismatch) hits = exact;
+  }
 
   if (hits.length === 0) {
     // Filtro por ano presente => histórico atendido.
@@ -137,6 +161,7 @@ function evaluateCore(item: CatalogItem, sectionId: string, page: CatalogPage, s
         (f) => f.schema === schemaKey && (inSection(f) || atTarget(f)) && (targets.length === 0 || atTarget(f)),
       );
       if (filters.length > 0) {
+        schema.confere = true; // o filtro está dentro do schema esperado
         return done({
           ...base,
           status: 'ok',
@@ -164,11 +189,14 @@ function evaluateCore(item: CatalogItem, sectionId: string, page: CatalogPage, s
 
     const sectionMarkup = ctx.markupByKey.get(sectionKey);
     let message: string;
-    if (!sectionMarkup?.schemas.has(schemaKey)) {
+    // O item existe, mas sob outro schema (ou fora de qualquer schema): informa o encontrado x esperado.
+    const elsewhere = sameAttr.filter((e) => e.schema !== schemaKey);
+    if (elsewhere.length > 0) {
+      const others = unique(elsewhere.map((e) => e.schemaRaw ?? '(fora de um serigySchema)')).join(', ');
+      schema.encontrado = others;
+      message = `serigyItem="${item.atributo}" encontrado, mas sob outro schema: ${others} (esperado: ${page.schemaUrl})`;
+    } else if (!sectionMarkup?.schemas.has(schemaKey)) {
       message = `serigySchema="${page.schemaUrl}" não encontrado em ${scope.url}`;
-    } else if (sameAttr.length > 0) {
-      const others = unique(sameAttr.map((e) => e.schema ?? '(fora de um serigySchema)')).join(', ');
-      message = `serigyItem="${item.atributo}" encontrado, mas sob outro schema: ${others}`;
     } else {
       const caseMismatch = ctx.elements.find((e) => inSection(e) && e.item?.toLowerCase() === item.atributo.toLowerCase());
       message = caseMismatch
@@ -246,7 +274,7 @@ export interface PreparedEvaluation {
  */
 export function prepareEvaluation(req: EvaluationRequest, deps: EvaluateDeps = {}): PreparedEvaluation {
   const catalog = deps.catalog ?? loadCatalog();
-  const loader = deps.loader ?? new HttpLoader();
+  const renderer = req.renderer ?? 'browser';
   const now = deps.now ?? (() => new Date());
   const startedAt = now().toISOString();
 
@@ -294,11 +322,13 @@ export function prepareEvaluation(req: EvaluationRequest, deps: EvaluateDeps = {
 
   const plan: EvaluationPlan = {
     url: portal,
+    portalNome: req.portalNome,
+    portalAmbiente: req.portalAmbiente,
     poder: req.poder,
     poderLabel: poder.label,
     startedAt,
     scope: { mode: itemCount === totalCatalogItems ? 'todos' : 'parcial', pages: selected.length, items: itemCount },
-    crawl: { maxPages, tryDocumentedCase },
+    crawl: { maxPages, tryDocumentedCase, renderer },
     pages: selected.map(({ page, sections }) => ({
       id: page.id,
       number: page.number,
@@ -332,7 +362,17 @@ export function prepareEvaluation(req: EvaluationRequest, deps: EvaluateDeps = {
     (!d.item || wanted.get(d.schema)!.has(d.item));
 
   async function run(emit: (event: StreamEvent) => void = () => {}, signal?: AbortSignal): Promise<EvaluationResult> {
-    const store = new PageStore(loader, maxPages, tryDocumentedCase, (page) => emit({ type: 'fetched', page }));
+    // Carregador injetado (testes) ou criado aqui: navegador real por padrão, com queda para HTTP simples.
+    const created: CreatedLoader = deps.loader ? { loader: deps.loader, renderer } : await createLoader(renderer);
+    try {
+      return await runWith(created, emit, signal);
+    } finally {
+      await created.loader.close?.();
+    }
+  }
+
+  async function runWith(created: CreatedLoader, emit: (event: StreamEvent) => void, signal?: AbortSignal): Promise<EvaluationResult> {
+    const store = new PageStore(created.loader, maxPages, tryDocumentedCase, (page) => emit({ type: 'fetched', page }));
 
     // 1. Página inicial (Invoker). Se falhar não há o que avaliar.
     await store.get(portal, 'inicial', false);
@@ -365,6 +405,7 @@ export function prepareEvaluation(req: EvaluationRequest, deps: EvaluateDeps = {
 
     // 3. Avisos e resultado final, na ordem do plano.
     const warnings: string[] = [];
+    if (created.warning) warnings.push(created.warning);
     for (const f of store.fetched) if (f.error) warnings.push(`Falha ao baixar ${f.url}: ${f.error}`);
     for (const m of store.markups) {
       for (const f of m.iframesWithoutLink) {
@@ -373,8 +414,10 @@ export function prepareEvaluation(req: EvaluationRequest, deps: EvaluateDeps = {
     }
     if (store.markups.some((m) => m.pendingWaits.length > 0)) {
       warnings.push(
-        'Algumas páginas usam serigyExecuteWaitSection (conteúdo carregado após clique). ' +
-          'O avaliador estático não executa JavaScript; itens exibidos só após a interação podem aparecer como "missing".',
+        created.renderer === 'browser'
+          ? 'Algumas seções de serigyExecuteWaitSection não apareceram após o clique (tempo esgotado ou clique sem efeito); os itens dependentes podem aparecer como "missing".'
+          : 'Algumas páginas usam serigyExecuteWaitSection (conteúdo carregado após clique). O download simples do HTML não executa JavaScript; ' +
+              'itens exibidos só após a interação podem aparecer como "missing". Use o navegador (renderer "browser").',
       );
     }
     if (store.elements.length === 0) warnings.push('Nenhum elemento com serigyItem foi encontrado nas páginas analisadas.');
@@ -417,13 +460,15 @@ export function prepareEvaluation(req: EvaluationRequest, deps: EvaluateDeps = {
 
     const result: EvaluationResult = {
       url: plan.url,
+      portalNome: plan.portalNome,
+      portalAmbiente: plan.portalAmbiente,
       poder: plan.poder,
       poderLabel: plan.poderLabel,
       startedAt,
       finishedAt: now().toISOString(),
       scope: plan.scope,
       invoker,
-      crawl: plan.crawl,
+      crawl: { ...plan.crawl, renderer: created.renderer },
       fetched: store.fetched,
       warnings,
       summary: summarize(pages.flatMap((p) => p.sections.flatMap((s) => s.items))),
