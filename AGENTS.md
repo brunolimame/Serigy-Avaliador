@@ -94,10 +94,16 @@ podem ser corrigidos daqui**: registre a divergência no commit/PR e comunique o
 
 ## 9. Git e entrega
 
-- Trabalhe sobre `main` apenas se o usuário pedir; prefira branch própria para mudanças maiores.
-- Commits pequenos, no imperativo/descritivo e em português, ex.: `Corrige título do item 25.5 (Ata de Eleição)`.
-- Nunca use `--no-verify`, `push --force` ou reescreva histórico sem pedido explícito.
-- Só faça commit/push quando solicitado.
+- **Branch principal: `dev`.** Ela substitui `main` como base de trabalho e destino de PRs. Para mudanças maiores, crie branch própria a partir de `dev`.
+- **Ao final de cada alteração, o agente deve gerar a mensagem de commit** seguindo o [Conventional Commits 1.0](https://www.conventionalcommits.org/pt-br/v1.0.0/), mesmo que não vá executar o commit. Apresente-a em bloco de código ao concluir a tarefa.
+  - Formato: `<tipo>(<escopo opcional>): <descrição>` + corpo e rodapés opcionais.
+  - Tipos: `feat`, `fix`, `docs`, `style`, `refactor`, `perf`, `test`, `build`, `ci`, `chore`, `revert`.
+  - Escopos sugeridos: `api`, `web`, `shared`, `catalog`, `docs`, `db`, `evaluator`, `report`.
+  - Descrição em português, no imperativo, minúscula, sem ponto final, até ~72 caracteres.
+  - Mudança incompatível: `!` após o tipo/escopo e rodapé `BREAKING CHANGE: ...`.
+  - Exemplos: `fix(catalog): corrige título do item 25.5 para Ata de Eleição` · `docs: adiciona AGENTS.md` · `feat(web): exibe selo de ambiente no resultado`.
+  - Alterações de matriz incluem o `.md` e o `catalog.json` no mesmo commit.
+- Só execute `git commit`/`git push` quando o usuário pedir; nunca use `--no-verify`, `push --force` nem reescreva histórico sem pedido explícito.
 - Descreva no commit/PR o que mudou **e como foi verificado** (`pnpm typecheck`, `pnpm test`). Se algo não foi verificado, diga.
 
 ## 10. Checklist antes de finalizar
@@ -105,4 +111,5 @@ podem ser corrigidos daqui**: registre a divergência no commit/PR e comunique o
 - [ ] Alteração de matriz? `.md` editado, `pnpm catalog` rodado, `catalog.json` incluído.
 - [ ] `pnpm typecheck` e `pnpm test` verdes.
 - [ ] `docs/avaliador.md` atualizado se o comportamento mudou.
+- [ ] Mensagem de commit (Conventional Commits) gerada e apresentada.
 - [ ] Nenhum arquivo gerado/binário/segredo adicionado indevidamente.
