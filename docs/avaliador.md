@@ -90,7 +90,7 @@ URL do portal ──▶ collector ──▶ markup (serigy*) ──▶ evaluate 
   para mostrar o rótulo, `Collapsible` aceita `open`/`onOpenChange`.
 - Aparência: tema institucional (azul-marinho em superfícies claras, definido nas variáveis do `:root` em
   `apps/web/src/index.css`); as cores vivas ficam restritas ao resultado: cada item é um cartão com fundo suave e
-  ícone conforme o status (verde = atendido, âmbar = atenção, azul-claro = vazio declarado, rosa = não encontrado).
+  ícone conforme o status (verde = atendido, âmbar = atenção, azul-claro = serigyEmpty declarado, rosa = não encontrado).
 - Comportamento: ao terminar a análise, **páginas e detalhes dos itens ficam fechados** (só as páginas em análise
   abrem sozinhas durante o stream). O botão "Detalhes" de cada item não atendido mostra descrição, esperado,
   encontrado e exemplos. O alerta "usa iframe com serigyLink" aparece **dentro do item** que depende dele.
@@ -192,8 +192,8 @@ Status de cada item:
 | Status | Quando |
 |---|---|
 | `ok` | há elemento com `serigyItem` = atributo sob o `serigySchema` correto e o valor é coerente com o tipo |
-| `warning` | encontrado, mas o valor não parece do tipo esperado, ou `serigyEmpty` sem motivo |
-| `empty` | `serigyEmpty="motivo"` — ausência de informação declarada intencionalmente |
+| `warning` | encontrado, mas o valor não parece do tipo esperado, o schema não confere, ou o `serigyEmpty` declarado não vale (sem motivo, motivo inválido ou repetido): **não atende** |
+| `empty` | rótulo "serigyEmpty declarado": `serigyEmpty` com motivo válido e único e sem conteúdo no item — **atende parcialmente** e conta no percentual |
 | `missing` | atributo não encontrado sob o schema, ou o próprio schema não existe na página do caminho da seção |
 
 - **Schema e URLs** são comparados sem diferenciar maiúsculas/minúsculas, ignorando host (no schema), prefixo
@@ -217,6 +217,22 @@ Status de cada item:
   11.1, 11.2, 11.3, 11.5, 11.6, 11.7, 11.11), com o percentual do grupo todo. Nada muda na avaliação: cada seção continua
   avaliada contra o schema da sua pasta, e o resultado da API segue com uma página por pasta (`PageResult`); o
   agrupamento é feito na apresentação.
+- **`serigyEmpty`** (`apps/api/src/evaluator/serigy-empty.ts`): é avaliado **sempre que declarado** (em qualquer
+  ocorrência do item, mesmo havendo outras com conteúdo). O motivo é **sanitizado** (remove tags HTML e caracteres de
+  controle, junta espaços, limita a 200 caracteres) e só então validado. Resultado por ocorrência
+  (`ItemResult.serigyEmpty`, com `motivo`, `valido` e `problema`):
+  - motivo preenchido, válido e único → **"serigyEmpty declarado — motivo: …"**, atende parcialmente (status `empty`);
+    havendo também conteúdo preenchido, o item segue o resultado do conteúdo e a mensagem informa o motivo;
+  - motivo em branco → **"serigyEmpty declarado mas motivo não informado"**: o item **não atende** (`warning`), mesmo que
+    outra ocorrência tenha conteúdo;
+  - motivo sem conteúdo válido (menos de 3 letras, repete um caractere ou é texto genérico como `n/a`, `-`, `teste`,
+    `nada`, `vazio`, `null`) → não atende, com a explicação;
+  - motivo **repetido** em outro `serigyEmpty` da mesma página (comparado sem caixa, acentos e pontuação) → não atende
+    nenhum dos repetidos: a documentação exige motivo único e distinto para cada `serigyEmpty`;
+  - **schema incorreto**: a mensagem traz primeiro a informação do schema que não confere e depois o resultado do
+    `serigyEmpty` acima; o item não é atendido.
+  O percentual não muda: `empty` conta como atendido e `warning` não conta. O `serigyEmpty` só é lido em elementos que
+  também têm `serigyItem`.
 - **Validação do schema (esperado x encontrado)**: achar o `serigyItem` sob um schema de mesmo caminho não basta; o
   **endereço completo** de `serigySchema` precisa corresponder ao da documentação (`canonicalSchema` em `markup.ts`:
   ignora caixa, espaços, barra final e o prefixo `/2026`, mas confere protocolo e host). Cada item traz
@@ -230,7 +246,7 @@ Status de cada item:
 - **Cor do percentual de atendimento** (`apps/web/src/score.ts`, `scoreTone`): páginas, seções e o total usam
   **vermelho abaixo de 40%**, **amarelo de 40% a menos de 100%** e **verde com 100%** (40% exato é amarelo). Aparece na
   borda lateral e no selo da página, no selo da seção e no número do "Atendimento". Os itens individuais mantêm a cor
-  do próprio resultado (atendido, atenção, vazio declarado, não encontrado), pois cada item é atendido ou não.
+  do próprio resultado (atendido, atenção, serigyEmpty declarado, não encontrado), pois cada item é atendido ou não.
 - **Histórico (`historicoExercicio`)**: o avaliador não verifica os 3 anos; se o schema da página tem um filtro por
   ano (um `<select>` dentro do schema com opções `20xx`), o item é dado como **atendido**, mesmo sem
   `serigyItem="historicoExercicio"` próprio (`YearFilter` em `markup.ts`, regra em `evaluate.ts`).

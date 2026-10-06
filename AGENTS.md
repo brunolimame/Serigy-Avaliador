@@ -75,7 +75,7 @@ podem ser corrigidos daqui**: registre a divergência no commit/PR e comunique o
 - Caminhos são testados **em minúsculas**; a grafia da documentação só com `tryDocumentedCase`.
 - Cada item é procurado pelo par (schema da página, `serigyItem`) **somente** na página da sua seção (ou no destino de `serigyLink`).
 - Valor de `serigyItem` é comparado com diferenciação de caixa; schema ignora caixa, barra final e prefixo `/2026`, mas confere protocolo e host.
-- Atendimento (%) = (`ok` + `empty`) / total; `warning` não conta. Faixas de cor: <40% vermelho, 40–<100% amarelo, 100% verde.
+- Atendimento (%) = (`ok` + `empty`) / total; `warning` não conta. `empty` = "serigyEmpty declarado" (motivo válido e único; atende parcialmente); `serigyEmpty` em branco, inválido ou repetido = `warning`. O `serigyEmpty` é avaliado sempre que declarado. Faixas de cor: <40% vermelho, 40–<100% amarelo, 100% verde.
 - Itens de exportação (`salvarRelatorio`) **nunca** são clicados nem baixados; apenas se verifica o mapeamento.
 - O mesmo número de página em várias pastas (3, 4, 8, 11) é **um item** para o usuário (`groupPagesByNumber`); a avaliação continua por pasta.
 - O avaliador **não burla** CAPTCHA/WAF. Não adicione evasão de bloqueios; a solução é liberar o IP/UA com o responsável pelo portal.

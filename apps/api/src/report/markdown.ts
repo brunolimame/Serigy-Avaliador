@@ -4,7 +4,7 @@ const ICON: Record<ItemStatus, string> = { ok: '✅', warning: '⚠️', empty: 
 const LABEL: Record<ItemStatus, string> = {
   ok: 'Atendido',
   warning: 'Atenção',
-  empty: 'Vazio declarado',
+  empty: 'serigyEmpty declarado',
   missing: 'Não encontrado',
 };
 
@@ -46,7 +46,7 @@ function analyzedCell(i: ItemResult): string {
 
 function summaryTable(s: Summary): string[] {
   return [
-    '| Total | ✅ Atendidos | ⚠️ Atenção | ➖ Vazios declarados | ❌ Não encontrados | Atendimento |',
+    '| Total | ✅ Atendidos | ⚠️ Atenção | ➖ serigyEmpty declarados | ❌ Não encontrados | Atendimento |',
     '|---:|---:|---:|---:|---:|---:|',
     `| ${s.total} | ${s.ok} | ${s.warning} | ${s.empty} | ${s.missing} | **${s.score}%** |`,
   ];
@@ -70,7 +70,7 @@ export function renderMarkdown(r: EvaluationResult): string {
 
   out.push('## Resumo geral', '', ...summaryTable(r.summary), '');
   out.push(
-    '> Atendimento = (atendidos + vazios declarados) / total. "Vazio declarado" é o uso de `serigyEmpty` com motivo.',
+    '> Atendimento = (atendidos + serigyEmpty declarados) / total. "serigyEmpty declarado" (motivo informado, válido e único) atende parcialmente e conta no percentual; motivo em branco, inválido ou repetido não atende.',
     '',
   );
 
@@ -115,6 +115,11 @@ export function renderMarkdown(r: EvaluationResult): string {
       out.push(`- **Critério(s):** ${i.criterios.join(', ') || '—'}`);
       if (s.caminhoUrl) out.push(`- **Caminho sugerido:** ${code(s.caminhoUrl)}`);
       out.push(`- **Esperado:** ${i.expected}`);
+      for (const c of i.serigyEmpty ?? []) {
+        out.push(
+          `- **serigyEmpty:** ${c.valido ? `declarado — motivo ${code(c.motivo)} (atende parcialmente)` : c.motivo ? `motivo ${code(c.motivo)} inválido — ${c.problema}` : 'declarado mas motivo não informado'}`,
+        );
+      }
       out.push(
         `- **Schema:** ${i.schema.confere ? '✅ confere' : '❌ não confere'} — esperado ${code(i.schema.esperado)}; encontrado ${i.schema.encontrado ? code(i.schema.encontrado) : 'nenhum'}`,
       );

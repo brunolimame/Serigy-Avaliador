@@ -20,6 +20,7 @@ import type { PageLoader } from './loader';
 import { createLoader, type CreatedLoader } from './loader-factory';
 import { canonicalSchema, normalizeSchema, type Delegation, type MarkupElement, type PageMarkup, type YearFilter } from './markup';
 import { documentedUrl } from './paths';
+import { checkSerigyEmpty, describeSerigyEmpty } from './serigy-empty';
 
 /** Item "Histórico (últimos 3 anos)": atendido quando existe filtro por ano no schema. */
 const HISTORICO_ATTR = 'historicoExercicio';
@@ -138,10 +139,11 @@ function evaluateCore(item: CatalogItem, sectionId: string, page: CatalogPage, s
   let schemaMismatch = false;
   const done = (r: Omit<ItemResult, 'loadedVia' | 'schema'>): ItemResult => {
     let out: ItemResult = { ...r, schema, ...(loadedVia.length ? { loadedVia } : {}) };
-    if (schemaMismatch && (out.status === 'ok' || out.status === 'empty')) {
+    // Schema incorreto: a informação do schema vem primeiro; a avaliação do item (inclusive serigyEmpty) segue depois.
+    if (schemaMismatch && out.status !== 'missing') {
       out = {
         ...out,
-        status: 'warning',
+        status: out.status === 'ok' || out.status === 'empty' ? 'warning' : out.status,
         message: `Item encontrado, mas o schema não confere: encontrado "${schema.encontrado}"; esperado "${page.schemaUrl}". ${out.message}`,
       };
     }
@@ -235,10 +237,38 @@ function evaluateCore(item: CatalogItem, sectionId: string, page: CatalogPage, s
   const analyzedUrls = unique(hits.map((e) => e.pageUrl));
   const filled = hits.filter((e) => e.empty === undefined);
 
+  // serigyEmpty é avaliado SEMPRE que declarado, mesmo havendo outras ocorrências com conteúdo.
+  const checks = hits.filter((e) => e.empty !== undefined).map((e) => checkSerigyEmpty(e, ctx.elements));
+  const emptyText = describeSerigyEmpty(checks);
+  const emptyProblem = checks.some((c) => !c.valido);
+
+  /**
+   * Junta o resultado do conteúdo com o do serigyEmpty:
+   *  - motivo em branco/inválido/repetido -> NÃO atende (Atenção), qualquer que seja o conteúdo;
+   *  - motivo válido e sem conteúdo       -> "serigyEmpty declarado" (atende parcialmente);
+   *  - motivo válido e com conteúdo       -> segue o resultado do conteúdo, com a informação do motivo.
+   */
+  const finish = (r: Omit<ItemResult, 'loadedVia' | 'schema'>): ItemResult => {
+    if (checks.length === 0) return done(r);
+    const content = r.message;
+    let { status } = r;
+    let message = content ? `${content}; ${emptyText}` : emptyText;
+    if (emptyProblem) status = 'warning';
+    else if (filled.length === 0) {
+      status = 'empty';
+      message = `${emptyText} (atende parcialmente)`;
+    }
+    return done({ ...r, status, message, serigyEmpty: checks });
+  };
+
+  if (filled.length === 0) {
+    return finish({ ...base, status: 'empty', message: '', analyzedUrls, evidence: evidence(hits) });
+  }
+
   // Exportação de dados: basta estar mapeado; nada é baixado ou executado.
-  if (MAPPING_ONLY.has(item.atributo) && filled.length > 0) {
+  if (MAPPING_ONLY.has(item.atributo)) {
     const formats = unique(filled.map((e) => e.value?.trim()).filter((v): v is string => Boolean(v)));
-    return done({
+    return finish({
       ...base,
       status: 'ok',
       message: `Mapeado (${filled.length} ocorrência(s)); a exportação não é executada${formats.length ? ` — formatos: ${formats.join(', ')}` : ''}`,
@@ -247,19 +277,11 @@ function evaluateCore(item: CatalogItem, sectionId: string, page: CatalogPage, s
     });
   }
 
-  if (filled.length === 0) {
-    const reasons = hits.map((e) => (e.empty ?? '').trim());
-    if (reasons.every(Boolean)) {
-      return done({ ...base, status: 'empty', message: `Declarado vazio: "${reasons[0]}"`, analyzedUrls, evidence: evidence(hits) });
-    }
-    return done({ ...base, status: 'warning', message: 'serigyEmpty presente, mas sem o motivo', analyzedUrls, evidence: evidence(hits) });
-  }
-
   const problems = filled.map((e) => validateType(item.tipos, e));
   if (problems.some((p) => p === null)) {
-    return done({ ...base, status: 'ok', message: `Encontrado (${filled.length} ocorrência(s))`, analyzedUrls, evidence: evidence(filled) });
+    return finish({ ...base, status: 'ok', message: `Encontrado (${filled.length} ocorrência(s))`, analyzedUrls, evidence: evidence(filled) });
   }
-  return done({ ...base, status: 'warning', message: problems[0] ?? 'valor inválido', analyzedUrls, evidence: evidence(filled) });
+  return finish({ ...base, status: 'warning', message: problems[0] ?? 'valor inválido', analyzedUrls, evidence: evidence(filled) });
 }
 
 function checkInvoker(start: PageMarkup | undefined): InvokerCheck {

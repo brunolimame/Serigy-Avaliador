@@ -48,7 +48,7 @@ const TONE: Record<ItemStatus, { label: string; row: string; chip: string; icon:
     iconClass: 'text-amber-600',
   },
   empty: {
-    label: 'Vazio declarado',
+    label: 'serigyEmpty declarado',
     row: 'border-sky-200 bg-sky-50/80 dark:border-sky-900 dark:bg-sky-950/30',
     chip: 'bg-sky-100 text-sky-800 dark:bg-sky-900/50 dark:text-sky-200',
     icon: CircleMinus,
@@ -99,7 +99,7 @@ function SummaryStats({ s }: { s: Summary }) {
       <Stat label="Itens avaliados" value={s.total} icon={Clock} color="text-slate-700" />
       <Stat label="Atendidos" value={s.ok} icon={CircleCheck} color="text-emerald-700" />
       <Stat label="Atenção" value={s.warning} icon={TriangleAlert} color="text-amber-700" />
-      <Stat label="Vazios declarados" value={s.empty} icon={CircleMinus} color="text-sky-700" />
+      <Stat label="serigyEmpty declarados" value={s.empty} icon={CircleMinus} color="text-sky-700" />
       <Stat label="Não encontrados" value={s.missing} icon={CircleX} color="text-rose-700" />
     </div>
   );
@@ -187,6 +187,20 @@ function ItemDetails({ item, page, section }: { item: ItemResult; page: PageResu
         <strong>Schema:</strong> {item.schema.confere ? '✓ confere' : '✗ não confere'} — esperado <code>{item.schema.esperado}</code>; encontrado{' '}
         {item.schema.encontrado ? <code>{item.schema.encontrado}</code> : 'nenhum'}
       </p>
+      {item.serigyEmpty?.map((c, n) => (
+        <p key={`${c.pageUrl}-${n}`}>
+          <strong>serigyEmpty:</strong>{' '}
+          {c.valido ? (
+            <>declarado — motivo “{c.motivo}” (atende parcialmente)</>
+          ) : c.motivo ? (
+            <>
+              motivo “{c.motivo}” inválido — {c.problema}
+            </>
+          ) : (
+            'declarado mas motivo não informado'
+          )}
+        </p>
+      ))}
       {item.evidence.length > 0 && (
         <div>
           <strong>Encontrado:</strong>

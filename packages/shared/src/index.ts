@@ -180,6 +180,17 @@ export interface Portal extends PortalInput {
  */
 export type ItemStatus = 'ok' | 'warning' | 'empty' | 'missing';
 
+/** Resultado da avaliação de um `serigyEmpty` declarado. */
+export interface SerigyEmptyCheck {
+  /** Motivo informado, já sanitizado (vazio = em branco). */
+  motivo: string;
+  /** Motivo preenchido, com conteúdo válido e único na página. */
+  valido: boolean;
+  /** Por que não vale (motivo não informado, texto genérico, repetido…). */
+  problema?: string;
+  pageUrl: string;
+}
+
 export interface ItemResult {
   id: string;
   sectionId: string;
@@ -205,6 +216,8 @@ export interface ItemResult {
    * quando o item foi achado) e `confere` (o endereço completo corresponde ao esperado).
    */
   schema: { esperado: string; encontrado?: string; confere: boolean };
+  /** Avaliação de cada serigyEmpty declarado no item (feita sempre que o atributo aparece). */
+  serigyEmpty?: SerigyEmptyCheck[];
   /** Até 3 trechos de HTML que comprovam o achado. */
   evidence: Array<{ pageUrl: string; snippet: string }>;
 }
