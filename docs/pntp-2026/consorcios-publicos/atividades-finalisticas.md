@@ -40,7 +40,7 @@
 | 25.4.1 | 25.4 | Contrato de Programa | contratoPrograma | Anexo |
  
 
-## 25.5. Contrato de Programa
+## 25.5. Ata de Eleição
 
  **Caminho URL:**[Portal da Transparencia]/Atividades/Atas/Eleicoes 
 
