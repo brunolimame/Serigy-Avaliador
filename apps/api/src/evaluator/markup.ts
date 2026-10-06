@@ -35,7 +35,7 @@ export interface MarkupElement {
 export interface Delegation {
   /** Página onde a delegação foi declarada. */
   pageUrl: string;
-  /** Schema (normalizado) do elemento ou de seu ancestral. */
+  /** Schema (normalizado) do elemento ou de seu ancestral; indefinido = fora de qualquer serigySchema (vale para o schema avaliado). */
   schema?: string;
   /** Se o elemento tem serigyItem, só este item é buscado no destino; senão, o schema inteiro. */
   item?: string;

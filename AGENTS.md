@@ -71,7 +71,7 @@ podem ser corrigidos daqui**: registre a divergência no commit/PR e comunique o
 
 ## 6. Invariantes do avaliador (não quebrar)
 
-- **Sem navegação por links `<a href>`.** Só se baixa: a URL informada, o "Caminho URL" de cada seção e destinos de `serigyLink` dos itens avaliados.
+- **Sem navegação por links `<a href>`.** Só se baixa: a URL informada, o "Caminho URL" de cada seção e destinos de `serigyLink` dos itens avaliados (de **qualquer tag**, dentro ou fora de `serigySchema`, e encadeados).
 - Caminhos são testados **em minúsculas**; a grafia da documentação só com `tryDocumentedCase`.
 - Cada item é procurado pelo par (schema da página, `serigyItem`) **somente** na página da sua seção (ou no destino de `serigyLink`).
 - Valor de `serigyItem` é comparado com diferenciação de caixa; schema ignora caixa, barra final e prefixo `/2026`, mas confere protocolo e host.

@@ -199,7 +199,7 @@ export interface ItemResult {
    */
   analyzedUrls: string[];
   /** Presente quando o item depende de serigyLink: o tipo do elemento (iframe ou outro) e a URL avaliada. */
-  loadedVia?: Array<{ kind: 'iframe' | 'serigyLink'; url: string }>;
+  loadedVia?: Array<{ kind: 'iframe' | 'serigyLink'; url: string; /** tag do elemento que declarou o serigyLink */ tag?: string }>;
   /**
    * Validação do schema do item: `esperado` (da documentação), `encontrado` (valor de serigySchema no HTML,
    * quando o item foi achado) e `confere` (o endereço completo corresponde ao esperado).

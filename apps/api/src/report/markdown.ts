@@ -120,7 +120,7 @@ export function renderMarkdown(r: EvaluationResult): string {
       );
       out.push(`- **URL analisada:** ${urlLinks(i.analyzedUrls).split('<br>').join(', ')}`);
       for (const v of i.loadedVia ?? []) {
-        out.push(`- **${v.kind === 'iframe' ? 'Carregado via iframe' : 'Via serigyLink'}:** serigyLink avaliado ${v.url}`);
+        out.push(`- **${v.kind === 'iframe' ? 'Carregado via iframe' : `Via serigyLink${v.tag ? ` (${code(`<${v.tag}>`)})` : ''}`}:** serigyLink avaliado ${v.url}`);
       }
       out.push(`- **Documentação:** ${p.docUrl}`);
       if (i.evidence.length) {

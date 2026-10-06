@@ -72,7 +72,7 @@ describe('serigyLink', () => {
     const r = await run(loader, { items: ['4.1.1', '4.1.2'] });
     const ok = find(r, '4.1.1');
     expect(ok).toMatchObject({ status: 'ok', analyzedUrls: ['https://externo.com/despesas'] });
-    expect(ok.loadedVia).toEqual([{ kind: 'iframe', url: 'https://externo.com/despesas' }]);
+    expect(ok.loadedVia).toEqual([{ kind: 'iframe', url: 'https://externo.com/despesas', tag: 'iframe' }]);
     const miss = find(r, '4.1.2');
     expect(miss).toMatchObject({ status: 'missing', analyzedUrls: ['https://externo.com/despesas'] });
     expect(miss.message).toMatch(/^O iframe aponta para https:\/\/externo\.com\/despesas/);
@@ -107,7 +107,7 @@ describe('serigyLink', () => {
     const r = await run(loader, { items: ['1.2', '1.3'] });
     const busca = find(r, '1.3');
     expect(busca).toMatchObject({ status: 'missing', analyzedUrls: ['https://oficial.gov.br/'] });
-    expect(busca.loadedVia).toEqual([{ kind: 'serigyLink', url: 'https://oficial.gov.br/' }]);
+    expect(busca.loadedVia).toEqual([{ kind: 'serigyLink', url: 'https://oficial.gov.br/', tag: 'div' }]);
     expect(busca.message).toContain('aponta para https://oficial.gov.br/');
     expect(find(r, '1.2')).toMatchObject({ status: 'ok', analyzedUrls: ['https://oficial.gov.br/outra'] });
   });

@@ -234,19 +234,23 @@ Status de cada item:
 - **Histórico (`historicoExercicio`)**: o avaliador não verifica os 3 anos; se o schema da página tem um filtro por
   ano (um `<select>` dentro do schema com opções `20xx`), o item é dado como **atendido**, mesmo sem
   `serigyItem="historicoExercicio"` próprio (`YearFilter` em `markup.ts`, regra em `evaluate.ts`).
-- **`serigyLink`**:
-  - **`<iframe serigySchema serigyLink>`** (link externo): o valor é a URL a ser analisada; o schema inteiro é
-    buscado lá. Se o item não está lá, fica `missing` (a mensagem cita "O iframe aponta para …").
-  - **Demais usos** seguem `definicoes.md`: elemento **com** `serigyItem` → só esse item é buscado na URL
-    (casos de "redirecionamento"); elemento com `serigySchema` e sem `serigyItem` → o schema é buscado na URL.
-    Não há exceções: p. ex. `<meta serigyItem="sitioOficial" serigyLink=…>` exige o `serigyItem` no destino. O
+- **`serigyLink`** vale em **qualquer tag** (`iframe`, `a`, `div`, `section`, `span`, `button`, `meta`, `link`…): sempre que o
+  atributo é informado numa página analisada, a URL é baixada e avaliada (`markup.ts` captura `[serigylink]` sem filtrar
+  por elemento). Segue `definicoes.md`:
+  - elemento **com** `serigyItem` → só esse item é buscado na URL (casos de "redirecionamento");
+  - elemento **sem** `serigyItem` (ex.: `<iframe serigySchema serigyLink>`) → o schema inteiro é buscado na URL;
+  - elemento **fora de qualquer `serigySchema`** → vale para o schema do item avaliado (o schema indefinido funciona
+    como curinga em `delegationsFor`/`shouldFollow`, em `evaluate.ts`);
+  - **encadeado**: a página de destino pode ter outros `serigyLink`; toda a cadeia é baixada e avaliada (ciclos são
+    ignorados);
+  - não há exceções por tag: p. ex. `<meta serigyItem="sitioOficial" serigyLink=…>` exige o `serigyItem` no destino. O
     próprio elemento que aponta não conta como evidência. Não achado no destino (ou destino inacessível) = `missing`.
-  - **Iframe identificado:** `PageResult.iframes` lista os iframes com `serigyLink` da página e a URL avaliada;
-    `ItemResult.loadedVia` marca os itens avaliados por esse caminho (kind `iframe` ou `serigyLink`). A UI e o
-    relatório exibem "Carregado via iframe". `<iframe serigySchema>` **sem** `serigyLink` gera aviso (o `src`
-    não é avaliado).
-  - Só são baixados serigyLink de schemas/itens avaliados; o destino aparece em "Páginas analisadas" com a origem
-    (`iframe` ou `serigyLink`).
+  - **Identificação:** `ItemResult.loadedVia` lista cada URL avaliada com o `kind` (`iframe` ou `serigyLink`) e a `tag`
+    do elemento que a declarou; a UI e o relatório mostram "Carregado via iframe" ou "Via serigyLink (`<a>`)".
+    `PageResult.iframes` lista só os iframes. `<iframe serigySchema>` **sem** `serigyLink` gera aviso (o `src` não é avaliado).
+  - Só são baixados serigyLink de itens/schemas que estão sendo avaliados, e **nunca** os de itens de exportação
+    (`salvarRelatorio`); o destino aparece em "Páginas analisadas" com a origem (`iframe` ou `serigyLink`) e conta no
+    limite `maxPages`.
 - **URL analisada**: cada item traz `analyzedUrls`: a página do caminho da sua seção (onde foi ou deveria ser
   encontrado) ou, havendo `serigyLink`, o(s) destino(s). Aparece na UI e no relatório (coluna "URL analisada").
 - **Exportação de dados (`salvarRelatorio`)**: apenas se verifica se o `serigyItem` está mapeado (`MAPPING_ONLY`

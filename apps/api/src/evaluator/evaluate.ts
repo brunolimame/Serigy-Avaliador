@@ -65,14 +65,35 @@ interface SectionScope {
 }
 
 /**
- * Páginas analisadas para um item: a página do caminho da documentação e, quando há serigyLink
- * aplicável (iframe ou elemento com serigyItem), as URLs de destino.
+ * serigyLink aplicáveis a um item: o atributo vale em QUALQUER tag (iframe, a, div, meta…), esteja o
+ * elemento dentro de um serigySchema ou não, e vale também nos destinos encadeados (a página de destino
+ * pode ter outros serigyLink).
+ *  - elemento com serigyItem  -> só esse item é buscado no destino;
+ *  - elemento sem serigyItem  -> o schema inteiro é buscado no destino;
+ *  - elemento fora de qualquer serigySchema (`schema` indefinido) -> vale para o schema do item avaliado.
  */
 function delegationsFor(ctx: Context, scope: SectionScope, schemaKey: string, atributo: string): Delegation[] {
   if (MAPPING_ONLY.has(atributo)) return [];
-  return ctx.delegations.filter(
-    (d) => urlKey(d.pageUrl) === urlKey(scope.url) && d.schema === schemaKey && (!d.item || d.item === atributo),
-  );
+  const applies = (d: Delegation) => (d.schema === undefined || d.schema === schemaKey) && (!d.item || d.item === atributo);
+
+  const found: Delegation[] = [];
+  const visited = new Set<string>([urlKey(scope.url)]);
+  let level = [scope.url];
+  while (level.length > 0) {
+    const next: string[] = [];
+    for (const url of level) {
+      for (const d of ctx.delegations) {
+        if (urlKey(d.pageUrl) !== urlKey(url) || !applies(d)) continue;
+        found.push(d);
+        if (!visited.has(urlKey(d.url))) {
+          visited.add(urlKey(d.url));
+          next.push(d.url);
+        }
+      }
+    }
+    level = next;
+  }
+  return found;
 }
 
 /** Avalia um item; quando não atendido, anexa os exemplos da documentação. */
@@ -105,10 +126,12 @@ function evaluateCore(item: CatalogItem, sectionId: string, page: CatalogPage, s
   const targets = unique(delegs.map((d) => d.url));
   const targetKeys = new Set(targets.map(urlKey));
   const atTarget = (e: { pageUrl: string }) => targetKeys.has(urlKey(e.pageUrl));
-  const loadedVia = unique(delegs.map((d) => `${d.tag === 'iframe' ? 'iframe' : 'serigyLink'}|${d.url}`)).map((v) => {
-    const [kind, ...rest] = v.split('|');
-    return { kind: kind as 'iframe' | 'serigyLink', url: rest.join('|') };
-  });
+  const loadedVia: NonNullable<ItemResult['loadedVia']> = [];
+  for (const d of delegs) {
+    if (!loadedVia.some((v) => urlKey(v.url) === urlKey(d.url))) {
+      loadedVia.push({ kind: d.tag === 'iframe' ? 'iframe' : 'serigyLink', url: d.url, tag: d.tag });
+    }
+  }
   // Validação do schema: o endereço completo encontrado no HTML deve corresponder ao esperado pela documentação.
   const expectedSchema = canonicalSchema(page.schemaUrl);
   const schema: ItemResult['schema'] = { esperado: page.schemaUrl, confere: false };
@@ -355,11 +378,12 @@ export function prepareEvaluation(req: EvaluationRequest, deps: EvaluateDeps = {
     for (const s of sections) for (const i of s.items) set.add(i.atributo);
     wanted.set(key, set);
   }
-  const shouldFollow = (d: Delegation): boolean =>
-    d.schema !== undefined &&
-    wanted.has(d.schema) &&
-    !(d.item && MAPPING_ONLY.has(d.item)) &&
-    (!d.item || wanted.get(d.schema)!.has(d.item));
+  // Segue o serigyLink de QUALQUER tag. Fora de um serigySchema (schema indefinido) vale para os schemas avaliados.
+  const shouldFollow = (d: Delegation): boolean => {
+    if (d.item && MAPPING_ONLY.has(d.item)) return false;
+    if (d.schema === undefined) return !d.item || [...wanted.values()].some((attrs) => attrs.has(d.item!));
+    return wanted.has(d.schema) && (!d.item || wanted.get(d.schema)!.has(d.item));
+  };
 
   async function run(emit: (event: StreamEvent) => void = () => {}, signal?: AbortSignal): Promise<EvaluationResult> {
     // Carregador injetado (testes) ou criado aqui: navegador real por padrão, com queda para HTTP simples.
@@ -430,7 +454,7 @@ export function prepareEvaluation(req: EvaluationRequest, deps: EvaluateDeps = {
       const sections: SectionResult[] = planPage.sections.map((planSection) => {
         const sectionUrl = store.resolved.get(urlKey(planSection.url)) ?? planSection.url;
         if (store.markupByKey.get(urlKey(sectionUrl))?.schemas.has(schemaKey)) analyzed.push(sectionUrl);
-        for (const d of store.delegations.filter((x) => urlKey(x.pageUrl) === urlKey(sectionUrl) && x.schema === schemaKey)) {
+        for (const d of store.delegations.filter((x) => urlKey(x.pageUrl) === urlKey(sectionUrl) && (x.schema === undefined || x.schema === schemaKey))) {
           if (store.markupByKey.get(urlKey(d.url))?.schemas.has(schemaKey)) analyzed.push(d.url);
           if (d.tag === 'iframe') iframes.push({ pageUrl: d.pageUrl, target: d.url });
         }

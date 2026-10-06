@@ -546,7 +546,7 @@ export function ResultView({ result, onChange, pending, progress, onCancel }: Pr
                                   })}
                                   {links.map((v) => (
                                     <div key={v.url} className="mt-1 break-all text-xs text-violet-700 dark:text-violet-300">
-                                      Via serigyLink → avaliado: {v.url}
+                                      Via serigyLink{v.tag ? ` (<${v.tag}>)` : ''} → avaliado: {v.url}
                                     </div>
                                   ))}
                                   {itemErrors[i.id] && <p className="mt-1 text-xs text-destructive">{itemErrors[i.id]}</p>}
