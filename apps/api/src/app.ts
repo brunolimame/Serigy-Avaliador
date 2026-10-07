@@ -129,9 +129,10 @@ export function createApp(deps: AppDeps = {}) {
       next(err);
     }
   });
-  // Restaura TODAS as configurações ao padrão (não mexe em portais nem no histórico)
+  // Restaura TODAS as configurações ao padrão e apaga os portais cadastrados (o histórico é mantido)
   app.delete('/api/configuracoes', (_req, res) => {
     settings().reset();
+    (deps.portais ?? defaultPortais()).removeAll();
     res.json(settings().response());
   });
 

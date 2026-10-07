@@ -301,6 +301,7 @@ export function ResultView({ result, onChange, pending, progress, onCancel, read
   const [itemErrors, setItemErrors] = useState<Record<string, string>>({});
   // Tudo começa FECHADO; só as páginas em análise abrem sozinhas (e fecham ao terminar). O usuário manda depois.
   const [openPages, setOpenPages] = useState<Record<string, boolean>>({});
+  const [warningsOpen, setWarningsOpen] = useState(false);
   const [openItems, setOpenItems] = useState<Record<string, boolean>>({});
 
   const stamp = result.finishedAt.slice(0, 10);
@@ -383,7 +384,7 @@ export function ResultView({ result, onChange, pending, progress, onCancel, read
   const failedFetches = result.fetched.filter((f) => f.error);
 
   return (
-    <section className="space-y-5">
+    <section className="flex min-h-0 flex-1 flex-col gap-4">
       <div className="flex flex-wrap items-center gap-3">
         <h2 className="text-xl font-semibold tracking-tight">Resultado</h2>
         <span className="text-sm text-muted-foreground">
@@ -442,7 +443,7 @@ export function ResultView({ result, onChange, pending, progress, onCancel, read
         </Alert>
       )}
 
-      <div className="sticky top-0 z-20 -mx-2 space-y-3 bg-background/95 px-2 py-2 backdrop-blur">
+      <div className="space-y-3">
       {progress && isLive && (
         <Card size="sm" role="status" aria-live="polite" className="border-blue-200">
           <CardContent className="space-y-2">
@@ -482,25 +483,32 @@ export function ResultView({ result, onChange, pending, progress, onCancel, read
       </Alert>
 
       {result.warnings.length > 0 && (
-        <Alert className="border-amber-200 bg-amber-50/80">
-          <TriangleAlert className="text-amber-600" />
-          <AlertTitle>
-            Avisos e falhas ({result.warnings.length})
-            {failedFetches.length > 0 && ` · ${failedFetches.length} página(s) com erro`}
-          </AlertTitle>
-          <AlertDescription>
-            {/* Lista rolável: pode haver dezenas de falhas */}
-            <ScrollArea className="mt-1 max-h-48 rounded-md border bg-white/80">
-              <ul className="space-y-1.5 p-2 text-xs">
-                {result.warnings.map((w) => (
-                  <li key={w} className="break-all">
-                    {w}
-                  </li>
-                ))}
-              </ul>
-            </ScrollArea>
-          </AlertDescription>
-        </Alert>
+        <Collapsible open={warningsOpen} onOpenChange={setWarningsOpen}>
+          <Alert className="border-amber-200 bg-amber-50/80">
+            <TriangleAlert className="text-amber-600" />
+            <AlertTitle>
+              <CollapsibleTrigger className="flex items-center gap-1 text-left">
+                <ChevronRight className={cn('size-4 transition-transform', warningsOpen && 'rotate-90')} />
+                Avisos e falhas ({result.warnings.length})
+                {failedFetches.length > 0 && ` · ${failedFetches.length} página(s) com erro`}
+              </CollapsibleTrigger>
+            </AlertTitle>
+            <AlertDescription>
+              <CollapsibleContent>
+                {/* Lista rolável: pode haver dezenas de falhas */}
+                <ScrollArea className="mt-1 max-h-40 rounded-md border bg-white/80">
+                  <ul className="space-y-1.5 p-2 text-xs">
+                    {result.warnings.map((w) => (
+                      <li key={w} className="break-all">
+                        {w}
+                      </li>
+                    ))}
+                  </ul>
+                </ScrollArea>
+              </CollapsibleContent>
+            </AlertDescription>
+          </Alert>
+        </Collapsible>
       )}
 
       <div className="flex flex-wrap gap-2">
@@ -511,7 +519,8 @@ export function ResultView({ result, onChange, pending, progress, onCancel, read
         ))}
       </div>
 
-      <div className="space-y-3">
+      {/* Só esta lista tem barra de rolagem: o cabeçalho, as estatísticas e os filtros ficam fixos acima */}
+      <div className="min-h-0 flex-1 space-y-3 overflow-y-auto pr-1">
         {/* Um item da matriz = um número: páginas de pastas diferentes com o mesmo número viram um grupo só */}
         {groupPagesByNumber(result.pages).map((group) => {
           const sections = group.sections

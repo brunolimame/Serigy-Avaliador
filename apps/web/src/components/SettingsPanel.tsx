@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { RotateCcw, X } from 'lucide-react';
+import { Loader2, RotateCcw, X } from 'lucide-react';
 import {
   SETTING_CATEGORIES,
   type PoderInfo,
@@ -121,6 +121,7 @@ function SettingRow({
 export function SettingsPanel({ open, onClose, settings, onSettingsChange, portais, poderes, onPortaisChanged, historyCount, onHistoryCleared }: Props) {
   const [category, setCategory] = useState<SettingCategory>('comportamento');
   const [confirmReset, setConfirmReset] = useState(false);
+  const [resetting, setResetting] = useState(false);
   const [confirmClear, setConfirmClear] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -148,11 +149,15 @@ export function SettingsPanel({ open, onClose, settings, onSettingsChange, porta
 
   async function resetAll() {
     setError(null);
+    setResetting(true);
     try {
       await apply(() => api.configuracoes.reset());
       setConfirmReset(false);
+      onPortaisChanged(); // os portais cadastrados também foram apagados
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setResetting(false);
     }
   }
 
@@ -179,16 +184,17 @@ export function SettingsPanel({ open, onClose, settings, onSettingsChange, porta
           <div className="ml-auto flex items-center gap-2">
             {confirmReset ? (
               <>
-                <span className="text-xs">Restaurar todas as configurações ao padrão?</span>
-                <Button type="button" size="xs" variant="destructive" onClick={() => void resetAll()}>
-                  Restaurar
+                <span className="text-xs">Restaurar o padrão e apagar os portais cadastrados?</span>
+                <Button type="button" size="xs" variant="destructive" disabled={resetting} onClick={() => void resetAll()}>
+                  {resetting && <Loader2 className="animate-spin" />}
+                  {resetting ? 'Restaurando…' : 'Restaurar'}
                 </Button>
-                <Button type="button" size="xs" variant="outline" onClick={() => setConfirmReset(false)}>
+                <Button type="button" size="xs" variant="outline" disabled={resetting} onClick={() => setConfirmReset(false)}>
                   Cancelar
                 </Button>
               </>
             ) : (
-              <Button type="button" size="xs" variant="outline" disabled={!settings || settings.modificadas.length === 0} onClick={() => setConfirmReset(true)}>
+              <Button type="button" size="xs" variant="outline" onClick={() => setConfirmReset(true)}>
                 <RotateCcw />
                 Restaurar configurações
               </Button>

@@ -2,7 +2,7 @@ import type { Server } from 'node:http';
 import { afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { EXPORT_FORMAT, EXPORT_VERSION, SETTINGS, type EvaluationResult } from '@serigy/shared';
 import { createApp } from '../src/app';
-import { AvaliacoesRepo, SettingsRepo } from '../src/db';
+import { AvaliacoesRepo, PortaisRepo, SettingsRepo } from '../src/db';
 import { openDatabase } from '../src/db/database';
 import { hashResultado } from '../src/history/canonical';
 import { buildEnvelope, parseEnvelope } from '../src/history/envelope';
@@ -23,7 +23,7 @@ beforeAll(async () => {
 
 const reg = () => {
   const db = openDatabase(':memory:');
-  return { avaliacoes: new AvaliacoesRepo(db, () => new Date('2026-10-07T10:00:00Z')), settings: new SettingsRepo(db) };
+  return { avaliacoes: new AvaliacoesRepo(db, () => new Date('2026-10-07T10:00:00Z')), settings: new SettingsRepo(db), portais: new PortaisRepo(db) };
 };
 
 describe('validação do resultado', () => {
@@ -192,7 +192,13 @@ describe('rotas HTTP', () => {
     const r2 = (await (await call('POST', '/api/evaluate', { url: 'https://p.gov.br/', poder: 'executivo', items: ['1.1'], maxPages: 9 })).json()) as EvaluationResult;
     expect(r2.crawl.maxPages).toBe(9);
 
+    // restaurar tudo também apaga os portais cadastrados (e mantém o histórico)
+    await call('POST', '/api/portais', { nome: 'P', url: 'https://p.gov.br', poder: 'executivo', ambiente: 'producao' });
+    await call('POST', '/api/avaliacoes', completo);
+    expect(((await (await call('GET', '/api/portais')).json()) as unknown[]).length).toBe(1);
     const reset = await call('DELETE', '/api/configuracoes');
     expect(((await reset.json()) as { modificadas: string[] }).modificadas).toEqual([]);
+    expect(((await (await call('GET', '/api/portais')).json()) as unknown[]).length).toBe(0);
+    expect(((await (await call('GET', '/api/avaliacoes')).json()) as unknown[]).length).toBe(1);
   });
 });

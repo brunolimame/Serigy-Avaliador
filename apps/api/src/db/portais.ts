@@ -97,6 +97,11 @@ export class PortaisRepo {
     return this.get(id)!;
   }
 
+  /** Apaga todos os portais cadastrados e devolve quantos foram removidos. */
+  removeAll(): number {
+    return Number(this.db.prepare('DELETE FROM portais').run().changes);
+  }
+
   remove(id: number): void {
     const res = this.db.prepare('DELETE FROM portais WHERE id = ?').run(id);
     if (Number(res.changes) === 0) throw new PortalError('Portal não encontrado', 404);

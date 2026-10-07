@@ -13,7 +13,7 @@ import type {
 import { api, ApiError } from './api';
 import { AmbienteBadge } from './components/AmbienteBadge';
 import { formatDateTime, HistoryPanel } from './components/HistoryPanel';
-import { ItemSelector } from './components/ItemSelector';
+import { ItemSelectorModal, selectionSummary } from './components/ItemSelector';
 import { ResultView } from './components/ResultView';
 import { SettingsPanel } from './components/SettingsPanel';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
@@ -60,6 +60,7 @@ export function App() {
   const [url, setUrl] = useState('');
   const [avulsoPoder, setAvulsoPoder] = useState<PoderId>('executivo');
   const [mode, setMode] = useState<Mode>('todos');
+  const [showSelector, setShowSelector] = useState(false);
   const [pages, setPages] = useState<CatalogPage[]>([]);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   // "Extra" desta avaliação: começa no valor das configurações e vale só para esta execução.
@@ -253,8 +254,8 @@ export function App() {
   );
 
   return (
-    <main className="mx-auto max-w-[1700px] space-y-5 p-4 sm:p-6">
-      <header className="flex flex-wrap items-center gap-4 rounded-xl border-b-4 border-blue-400 bg-blue-950 px-6 py-4 text-white shadow-sm">
+    <main className="mx-auto flex max-w-[1700px] flex-col gap-4 p-4 sm:p-6 lg:h-dvh lg:overflow-hidden">
+      <header className="flex shrink-0 flex-wrap items-center gap-4 rounded-xl border-b-4 border-blue-400 bg-blue-950 px-6 py-3 text-white shadow-sm">
         <div className="min-w-0 flex-1">
           <p className="text-xs font-medium uppercase tracking-widest text-blue-200">PNTP 2026 · Serigy</p>
           <h1 className="mt-1 text-2xl font-semibold tracking-tight">Avaliador de Portais da Transparência</h1>
@@ -275,9 +276,9 @@ export function App() {
         </Button>
       </header>
 
-      <div className="grid items-start gap-6 lg:grid-cols-[26rem_minmax(0,1fr)]">
+      <div className="grid min-h-0 flex-1 gap-6 lg:grid-cols-[26rem_minmax(0,1fr)] lg:grid-rows-[minmax(0,1fr)]">
         {/* Coluna esquerda: nova avaliação / histórico */}
-        <aside className="space-y-3 lg:sticky lg:top-4 lg:max-h-[calc(100vh-2rem)] lg:overflow-y-auto lg:pr-1">
+        <aside className="min-h-0 space-y-3 lg:overflow-y-auto lg:pr-1">
           <div className="grid grid-cols-2 gap-1 rounded-lg bg-muted p-1" role="tablist">
             {(
               [
@@ -397,7 +398,14 @@ export function App() {
 
                   <div className="space-y-2">
                     <Label>O que avaliar</Label>
-                    <RadioGroup value={mode} onValueChange={(v) => setMode(v as Mode)} className="grid gap-2">
+                    <RadioGroup
+                      value={mode}
+                      onValueChange={(v) => {
+                        setMode(v as Mode);
+                        if (v === 'selecionar') setShowSelector(true);
+                      }}
+                      className="grid gap-2"
+                    >
                       <label className="flex cursor-pointer items-center gap-2 text-sm">
                         <RadioGroupItem value="todos" />
                         Todos os itens (comuns + {poderLabel})
@@ -409,7 +417,23 @@ export function App() {
                     </RadioGroup>
                   </div>
 
-                  {mode === 'selecionar' && <ItemSelector pages={pages} selected={selected} onChange={setSelected} />}
+                  {mode === 'selecionar' && (
+                    <div className="flex flex-wrap items-center gap-2 rounded-lg border bg-muted/40 px-3 py-2 text-sm">
+                      {(() => {
+                        const s = selectionSummary(pages, selected);
+                        return s.itemsSelected === 0 ? (
+                          <span className="text-muted-foreground">Nenhum item selecionado</span>
+                        ) : (
+                          <span>
+                            <strong>{s.groupsSelected}</strong> de {s.groupsTotal} grupos · <strong>{s.itemsSelected}</strong> de {s.itemsTotal} itens
+                          </span>
+                        );
+                      })()}
+                      <Button type="button" size="xs" variant="outline" className="ml-auto bg-white" onClick={() => setShowSelector(true)}>
+                        Selecionar itens…
+                      </Button>
+                    </div>
+                  )}
 
                   <div className="space-y-2 rounded-lg border p-3">
                     <div className="flex items-center gap-2 text-sm font-medium">
@@ -451,9 +475,9 @@ export function App() {
         </aside>
 
         {/* Coluna direita: resultado (estatísticas fixas no topo) */}
-        <section className="min-w-0 space-y-4">
+        <section className="flex min-h-0 min-w-0 flex-col gap-4">
           {error && (
-            <Alert variant="destructive">
+            <Alert variant="destructive" className="shrink-0">
               <CircleAlert />
               <AlertTitle>Não foi possível concluir a operação</AlertTitle>
               <AlertDescription>{error}</AlertDescription>
@@ -497,6 +521,8 @@ export function App() {
           )}
         </section>
       </div>
+
+      <ItemSelectorModal open={showSelector} onClose={() => setShowSelector(false)} pages={pages} selected={selected} onChange={setSelected} />
 
       <SettingsPanel
         open={showSettings}

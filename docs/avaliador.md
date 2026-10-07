@@ -94,7 +94,9 @@ URL do portal ──▶ collector ──▶ markup (serigy*) ──▶ evaluate 
 - Comportamento: ao terminar a análise, **páginas e detalhes dos itens ficam fechados** (só as páginas em análise
   abrem sozinhas durante o stream). O botão "Detalhes" de cada item não atendido mostra descrição, esperado,
   encontrado e exemplos. O alerta "usa iframe com serigyLink" aparece **dentro do item** que depende dele.
-  Largura máxima da página: 1700px.
+  Largura máxima da página: 1700px. Em telas largas (≥ lg) a página não tem rolagem vertical: só a coluna esquerda
+  e a **lista de itens** rolam (cabeçalho, estatísticas, avisos recolhidos e filtros ficam fixos). "Selecionar itens" abre uma
+  janela; o formulário mostra o total de grupos e itens marcados.
 - Layout em **2 colunas** (estilo CRM): à esquerda, abas "Nova avaliação" e "Histórico"; à direita, o resultado, com
   a barra de estatísticas/progresso fixa no topo. Em telas estreitas vira coluna única.
 - Rolagem: a lista de avisos/falhas usa `ScrollArea` (altura máxima 12rem) e os exemplos HTML da documentação usam
@@ -142,8 +144,8 @@ Janela estilo VS Code (botão "Configurações" ou **Ctrl+,** / **Cmd+,**; Esc f
   `maxPages`, `tryDocumentedCase`); o valor explícito do corpo prevalece. No formulário, "Extras desta avaliação"
   mostra o máx. de páginas começando no valor das configurações, valendo só para aquela execução.
 - **API:** `GET /api/configuracoes` (definições, valores, `modificadas`), `PUT /api/configuracoes/:chave` (`{valor}`),
-  `DELETE /api/configuracoes/:chave` (restaura uma), `DELETE /api/configuracoes` (restaura todas; não mexe em portais
-  nem no histórico). Erros: 400 (valor inválido), 404 (chave inexistente).
+  `DELETE /api/configuracoes/:chave` (restaura uma), `DELETE /api/configuracoes` (restaura todas **e apaga os portais
+  cadastrados**; o histórico é mantido). Erros: 400 (valor inválido), 404 (chave inexistente).
 
 ## Histórico, exportação e importação
 
