@@ -278,6 +278,14 @@ Status de cada item:
   "Detalhes das pendências".
 - **Reavaliar**: o botão em cada item chama `POST /api/evaluate` com `items: [id]` e os mesmos parâmetros de
   rastreio (`result.crawl`); a UI troca só aquele item e recalcula os resumos (`apps/web/src/merge.ts`).
+- **Reavaliar grupo**: o botão no cabeçalho de cada grupo (um número da matriz, que pode reunir mais de uma pasta)
+  reavalia **todos os itens do grupo** com os mesmos parâmetros, em **uma única chamada** `POST /api/evaluate` com
+  `items: [todos os ids do grupo]` (cada página é baixada uma vez). A UI mescla os itens de todas as pastas do grupo e
+  recalcula os resumos (`mergeReevaluatedMany`). Durante a reavaliação o botão mostra "Reavaliando N itens…" e os
+  demais botões de reavaliar ficam desabilitados; um erro aparece abaixo do cabeçalho do grupo.
+- **Ícone do nível de atendimento do grupo**: o cabeçalho do grupo traz o mesmo tipo de ícone dos itens, conforme o
+  percentual: `CircleCheck` verde (100%), `TriangleAlert` amarelo (40% a menos de 100%) e `CircleX` vermelho (abaixo de
+  40%); durante a análise aparece o spinner (em andamento) ou o relógio (aguardando).
 
 ### Limitações conhecidas
 

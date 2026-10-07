@@ -18,10 +18,10 @@ import {
 import type { EvaluationResult, ItemResult, ItemStatus, PageResult, SectionResult, Summary } from '@serigy/shared';
 import { groupPagesByNumber, summarize } from '@serigy/shared';
 import { api, download } from '../api';
-import { SCORE_STYLE, scoreTone } from '../score';
+import { SCORE_STYLE, scoreTone, type ScoreTone } from '../score';
 import { AMBIENTE_TONE } from './AmbienteBadge';
 import type { PendingState } from '../live';
-import { mergeReevaluated } from '../merge';
+import { mergeReevaluated, mergeReevaluatedMany } from '../merge';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -119,6 +119,13 @@ function UrlList({ urls }: { urls: string[] }) {
     </>
   );
 }
+
+/** Ícone do nível de atendimento do grupo/página (mesmos ícones e cores dos itens: ok, atenção e não encontrado). */
+const SCORE_ICON: Record<ScoreTone, { icon: LucideIcon; className: string; label: string }> = {
+  green: { icon: CircleCheck, className: 'text-emerald-600', label: 'Atendimento total' },
+  amber: { icon: TriangleAlert, className: 'text-amber-600', label: 'Atendimento parcial' },
+  red: { icon: CircleX, className: 'text-rose-600', label: 'Atendimento baixo' },
+};
 
 /** Selo do percentual de atendimento: < 40% vermelho, de 40% a < 100% amarelo, 100% verde. */
 function ScoreBadge({ summary }: { summary: Summary }) {
@@ -257,6 +264,9 @@ export function ResultView({ result, onChange, pending, progress, onCancel }: Pr
   const [busy, setBusy] = useState(false);
   const [exportError, setExportError] = useState<string | null>(null);
   const [reevaluating, setReevaluating] = useState<string | null>(null);
+  // Número do grupo cujos itens estão sendo todos reavaliados
+  const [reevaluatingGroup, setReevaluatingGroup] = useState<string | null>(null);
+  const [groupErrors, setGroupErrors] = useState<Record<string, string>>({});
   const [itemErrors, setItemErrors] = useState<Record<string, string>>({});
   // Tudo começa FECHADO; só as páginas em análise abrem sozinhas (e fecham ao terminar). O usuário manda depois.
   const [openPages, setOpenPages] = useState<Record<string, boolean>>({});
@@ -295,6 +305,30 @@ export function ResultView({ result, onChange, pending, progress, onCancel }: Pr
       setItemErrors((prev) => ({ ...prev, [itemId]: err instanceof Error ? err.message : String(err) }));
     } finally {
       setReevaluating(null);
+    }
+  }
+
+  /**
+   * Reavalia TODOS os itens de um grupo (um número da matriz, que pode reunir mais de uma pasta) com os mesmos
+   * parâmetros. É uma única chamada à API: cada página é baixada uma vez e os resultados são mesclados de uma vez.
+   */
+  async function reevaluateGroup(groupNumber: string, itemIds: string[]) {
+    setReevaluatingGroup(groupNumber);
+    setGroupErrors(({ [groupNumber]: _drop, ...rest }) => rest);
+    try {
+      const fresh = await api.evaluate({
+        url: result.url,
+        poder: result.poder,
+        items: itemIds,
+        maxPages: result.crawl.maxPages,
+        tryDocumentedCase: result.crawl.tryDocumentedCase,
+        renderer: result.crawl.renderer,
+      });
+      onChange(mergeReevaluatedMany(result, fresh));
+    } catch (err) {
+      setGroupErrors((prev) => ({ ...prev, [groupNumber]: err instanceof Error ? err.message : String(err) }));
+    } finally {
+      setReevaluatingGroup(null);
     }
   }
 
@@ -447,15 +481,35 @@ export function ResultView({ result, onChange, pending, progress, onCancel }: Pr
               onOpenChange={(o) => setOpenPages((prev) => ({ ...prev, [group.number]: o }))}
               className={cn('overflow-hidden rounded-xl border border-l-4 bg-card shadow-sm', pageTone(summary, pendingCount))}
             >
-              <CollapsibleTrigger className="flex w-full flex-wrap items-center gap-2 p-3.5 text-left font-medium hover:bg-muted/60">
+              <div className="flex items-center hover:bg-muted/60">
+              <CollapsibleTrigger className="flex min-w-0 flex-1 flex-wrap items-center gap-2 p-3.5 text-left font-medium">
                 <ChevronRight className={cn('size-4 shrink-0 text-muted-foreground transition-transform', isOpen && 'rotate-90')} />
+                {/* Ícone do nível de atendimento do grupo: em análise (spinner/relógio) ou verde, amarelo, vermelho */}
+                {pendingCount > 0 ? (
+                  hasRunning ? (
+                    <Spinner className="size-5 shrink-0 text-primary" />
+                  ) : (
+                    <Clock aria-hidden className="size-5 shrink-0 text-muted-foreground" />
+                  )
+                ) : (
+                  (() => {
+                    const level = SCORE_ICON[scoreTone(summary.score)];
+                    const LevelIcon = level.icon;
+                    return (
+                      <LevelIcon
+                        role="img"
+                        aria-label={`${level.label} (${summary.score}%)`}
+                        className={cn('size-5 shrink-0', level.className)}
+                      />
+                    );
+                  })()
+                )}
                 {group.number}. {group.title}
                 {group.pages.map((p) => (
                   <code key={p.id} className="text-xs font-normal text-muted-foreground">
                     {p.id}
                   </code>
                 ))}
-                {hasRunning && <Spinner className="text-primary" />}
                 <span className="ml-auto text-sm font-normal text-muted-foreground">
                   {pendingCount > 0 ? (
                     `${allItems.length - pendingCount}/${allItems.length} concluídos`
@@ -469,6 +523,24 @@ export function ResultView({ result, onChange, pending, progress, onCancel }: Pr
                   </Badge>
                 )}
               </CollapsibleTrigger>
+              {/* Reavaliar todos os itens do grupo (não faz parte do gatilho de abrir/fechar) */}
+              {!isLive && (
+                <div className="shrink-0 pr-3">
+                  <Button
+                    type="button"
+                    size="xs"
+                    variant="outline"
+                    className="bg-white/80"
+                    onClick={() => reevaluateGroup(group.number, allItems.map((i) => i.id))}
+                    disabled={reevaluating !== null || reevaluatingGroup !== null}
+                  >
+                    {reevaluatingGroup === group.number ? <Spinner /> : <RefreshCw />}
+                    {reevaluatingGroup === group.number ? `Reavaliando ${allItems.length} itens…` : 'Reavaliar grupo'}
+                  </Button>
+                </div>
+              )}
+              </div>
+              {groupErrors[group.number] && <p className="px-4 pb-2 text-xs text-destructive">{groupErrors[group.number]}</p>}
               <CollapsibleContent>
                 <div className="space-y-5 border-t bg-card/60 p-4">
                   <div className="flex flex-wrap gap-x-4 gap-y-1">
@@ -574,7 +646,7 @@ export function ResultView({ result, onChange, pending, progress, onCancel }: Pr
                                     variant="outline"
                                     className="bg-white/80"
                                     onClick={() => reevaluate(i.id)}
-                                    disabled={reevaluating !== null || isLive}
+                                    disabled={reevaluating !== null || reevaluatingGroup !== null || isLive}
                                   >
                                     {reevaluating === i.id ? <Spinner /> : <RefreshCw />}
                                     {reevaluating === i.id ? 'Reavaliando…' : 'Reavaliar'}
