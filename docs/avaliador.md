@@ -94,8 +94,9 @@ URL do portal ──▶ collector ──▶ markup (serigy*) ──▶ evaluate 
 - Comportamento: ao terminar a análise, **páginas e detalhes dos itens ficam fechados** (só as páginas em análise
   abrem sozinhas durante o stream). O botão "Detalhes" de cada item não atendido mostra descrição, esperado,
   encontrado e exemplos. O alerta "usa iframe com serigyLink" aparece **dentro do item** que depende dele.
-  Largura máxima da página: 1700px. Em telas largas (≥ lg) a página não tem rolagem vertical: só a coluna esquerda
-  e a **lista de itens** rolam (cabeçalho, estatísticas, avisos recolhidos e filtros ficam fixos). "Selecionar itens" abre uma
+  Largura máxima da página: 1700px. A página rola normalmente; a **lista de itens** tem altura limitada
+  (mín. 28rem, máx. 80vh) e rola por dentro, com cabeçalho, estatísticas, avisos recolhidos e filtros acima dela. O **Invoker** é o
+  primeiro item da lista e tem "Reavaliar"; "Detalhes" existe em todos os itens, inclusive os atendidos. "Selecionar itens" abre uma
   janela; o formulário mostra o total de grupos e itens marcados.
 - Layout em **2 colunas** (estilo CRM): à esquerda, abas "Nova avaliação" e "Histórico"; à direita, o resultado, com
   a barra de estatísticas/progresso fixa no topo. Em telas estreitas vira coluna única.

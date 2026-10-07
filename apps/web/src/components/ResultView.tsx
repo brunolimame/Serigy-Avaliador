@@ -208,7 +208,7 @@ function ItemDetails({ item, page, section }: { item: ItemResult; page: PageResu
         </div>
       </div>
       <p>
-        <strong>Não atendido:</strong> {item.message}
+        <strong>{item.status === 'ok' ? 'Atendido' : item.status === 'empty' ? 'serigyEmpty declarado' : 'Não atendido'}:</strong> {item.message}
       </p>
       <p>
         <strong>Esperado:</strong> {item.expected}
@@ -302,6 +302,8 @@ export function ResultView({ result, onChange, pending, progress, onCancel, read
   // Tudo começa FECHADO; só as páginas em análise abrem sozinhas (e fecham ao terminar). O usuário manda depois.
   const [openPages, setOpenPages] = useState<Record<string, boolean>>({});
   const [warningsOpen, setWarningsOpen] = useState(false);
+  const [reevaluatingInvoker, setReevaluatingInvoker] = useState(false);
+  const [invokerError, setInvokerError] = useState<string | null>(null);
   const [openItems, setOpenItems] = useState<Record<string, boolean>>({});
 
   const stamp = result.finishedAt.slice(0, 10);
@@ -329,6 +331,32 @@ export function ResultView({ result, onChange, pending, progress, onCancel, read
       setExportError(err instanceof Error ? err.message : String(err));
     } finally {
       setBusy(false);
+    }
+  }
+
+  /**
+   * Reavalia a identificação do Invoker: baixa de novo a página principal (junto de um item qualquer, o mais barato)
+   * e troca só o resultado do Invoker.
+   */
+  async function reevaluateInvoker() {
+    const probe = result.pages.flatMap((p) => p.sections.flatMap((s) => s.items))[0];
+    if (!probe) return;
+    setReevaluatingInvoker(true);
+    setInvokerError(null);
+    try {
+      const fresh = await api.evaluate({
+        url: result.url,
+        poder: result.poder,
+        items: [probe.id],
+        maxPages: result.crawl.maxPages,
+        tryDocumentedCase: result.crawl.tryDocumentedCase,
+        renderer: result.crawl.renderer,
+      });
+      onChange({ ...result, invoker: fresh.invoker });
+    } catch (err) {
+      setInvokerError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setReevaluatingInvoker(false);
     }
   }
 
@@ -384,7 +412,7 @@ export function ResultView({ result, onChange, pending, progress, onCancel, read
   const failedFetches = result.fetched.filter((f) => f.error);
 
   return (
-    <section className="flex min-h-0 flex-1 flex-col gap-4">
+    <section className="flex flex-col gap-4">
       <div className="flex flex-wrap items-center gap-3">
         <h2 className="text-xl font-semibold tracking-tight">Resultado</h2>
         <span className="text-sm text-muted-foreground">
@@ -473,15 +501,6 @@ export function ResultView({ result, onChange, pending, progress, onCancel, read
       <SummaryStats s={result.summary} />
       </div>
 
-      <Alert
-        variant={result.invoker.found ? 'default' : 'destructive'}
-        className={result.invoker.found ? 'border-emerald-200 bg-emerald-50/80' : 'border-rose-200 bg-rose-50/80'}
-      >
-        {result.invoker.found ? <CircleCheck className="text-emerald-600" /> : <CircleAlert />}
-        <AlertTitle>Invoker</AlertTitle>
-        <AlertDescription>{result.invoker.message}</AlertDescription>
-      </Alert>
-
       {result.warnings.length > 0 && (
         <Collapsible open={warningsOpen} onOpenChange={setWarningsOpen}>
           <Alert className="border-amber-200 bg-amber-50/80">
@@ -519,8 +538,39 @@ export function ResultView({ result, onChange, pending, progress, onCancel, read
         ))}
       </div>
 
-      {/* Só esta lista tem barra de rolagem: o cabeçalho, as estatísticas e os filtros ficam fixos acima */}
-      <div className="min-h-0 flex-1 space-y-3 overflow-y-auto pr-1">
+      {/* A lista tem altura limitada e rola por dentro; cabeçalho, estatísticas e filtros ficam acima dela */}
+      <div className="max-h-[80vh] min-h-[28rem] space-y-3 overflow-y-auto pr-1">
+        {/* Invoker: primeiro item da análise (identificação na página principal) */}
+        {(() => {
+          const t = TONE[result.invoker.found ? 'ok' : 'missing'];
+          const Icon = t.icon;
+          return (
+            <div className={cn('flex items-start gap-3 rounded-xl border p-3', t.row)}>
+              <Icon className={cn('mt-0.5 size-5 shrink-0', t.iconClass)} />
+              <div className="min-w-0 flex-1 text-sm">
+                <div className="font-medium">Invoker</div>
+                <div className="text-xs text-muted-foreground">{result.invoker.message}</div>
+                {invokerError && <p className="mt-1 text-xs text-destructive">{invokerError}</p>}
+              </div>
+              <div className="flex shrink-0 flex-col items-end gap-1.5">
+                <Badge className={cn('border-transparent', t.chip)}>{result.invoker.found ? 'Encontrado' : 'Não encontrado'}</Badge>
+                {!readOnly && !isLive && (
+                  <Button
+                    type="button"
+                    size="xs"
+                    variant="outline"
+                    className="bg-white/80"
+                    onClick={reevaluateInvoker}
+                    disabled={reevaluatingInvoker || reevaluating !== null || reevaluatingGroup !== null}
+                  >
+                    {reevaluatingInvoker ? <Spinner /> : <RefreshCw />}
+                    {reevaluatingInvoker ? 'Reavaliando…' : 'Reavaliar'}
+                  </Button>
+                )}
+              </div>
+            </div>
+          );
+        })()}
         {/* Um item da matriz = um número: páginas de pastas diferentes com o mesmo número viram um grupo só */}
         {groupPagesByNumber(result.pages).map((group) => {
           const sections = group.sections
@@ -671,7 +721,7 @@ export function ResultView({ result, onChange, pending, progress, onCancel, read
 
                           const tone = TONE[i.status];
                           const StatusIcon = tone.icon;
-                          const hasDetails = i.status === 'missing' || i.status === 'warning';
+                          const hasDetails = true; // detalhes em todos os itens, inclusive os atendidos
                           const detailsOpen = openItems[i.id] ?? false; // detalhes sempre começam fechados
                           const iframes = (i.loadedVia ?? []).filter((v) => v.kind === 'iframe');
                           const links = (i.loadedVia ?? []).filter((v) => v.kind !== 'iframe');

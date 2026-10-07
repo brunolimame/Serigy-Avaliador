@@ -254,7 +254,7 @@ export function App() {
   );
 
   return (
-    <main className="mx-auto flex max-w-[1700px] flex-col gap-4 p-4 sm:p-6 lg:h-dvh lg:overflow-hidden">
+    <main className="mx-auto flex max-w-[1700px] flex-col gap-4 p-4 sm:p-6 ">
       <header className="flex shrink-0 flex-wrap items-center gap-4 rounded-xl border-b-4 border-blue-400 bg-blue-950 px-6 py-3 text-white shadow-sm">
         <div className="min-w-0 flex-1">
           <p className="text-xs font-medium uppercase tracking-widest text-blue-200">PNTP 2026 · Serigy</p>
@@ -276,9 +276,9 @@ export function App() {
         </Button>
       </header>
 
-      <div className="grid min-h-0 flex-1 gap-6 lg:grid-cols-[26rem_minmax(0,1fr)] lg:grid-rows-[minmax(0,1fr)]">
+      <div className="grid items-start gap-6 lg:grid-cols-[26rem_minmax(0,1fr)]">
         {/* Coluna esquerda: nova avaliação / histórico */}
-        <aside className="min-h-0 space-y-3 lg:overflow-y-auto lg:pr-1">
+        <aside className="space-y-3">
           <div className="grid grid-cols-2 gap-1 rounded-lg bg-muted p-1" role="tablist">
             {(
               [
@@ -475,7 +475,7 @@ export function App() {
         </aside>
 
         {/* Coluna direita: resultado (estatísticas fixas no topo) */}
-        <section className="flex min-h-0 min-w-0 flex-col gap-4">
+        <section className="flex min-w-0 flex-col gap-4">
           {error && (
             <Alert variant="destructive" className="shrink-0">
               <CircleAlert />
