@@ -14,15 +14,15 @@ export const AMBIENTE_TONE: Record<
   producao: {
     label: 'Produção',
     icon: Server,
-    badge: 'border-emerald-300 bg-emerald-100 text-emerald-800',
-    banner: 'border-emerald-300 bg-emerald-50 text-emerald-900',
+    badge: 'border-emerald-300 bg-emerald-100 text-emerald-800 dark:border-emerald-800 dark:bg-emerald-900/50 dark:text-emerald-200',
+    banner: 'border-emerald-300 bg-emerald-50 text-emerald-900 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-200',
     stripe: 'border-l-emerald-500',
   },
   desenvolvimento: {
     label: 'Desenvolvimento',
     icon: FlaskConical,
-    badge: 'border-amber-300 bg-amber-100 text-amber-900',
-    banner: 'border-amber-300 bg-amber-50 text-amber-900',
+    badge: 'border-amber-300 bg-amber-100 text-amber-900 dark:border-amber-800 dark:bg-amber-900/50 dark:text-amber-200',
+    banner: 'border-amber-300 bg-amber-50 text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200',
     stripe: 'border-l-amber-500',
   },
 };

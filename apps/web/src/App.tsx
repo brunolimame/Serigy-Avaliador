@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowLeft, CircleAlert, CircleCheck, History, Info, Play, Save, Settings } from 'lucide-react';
+import { ArrowLeft, CircleAlert, CircleCheck, History, Info, Moon, Play, Save, Settings, Sun } from 'lucide-react';
 import type {
   AvaliacaoDetalhe,
   AvaliacaoResumo,
@@ -26,6 +26,7 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
 import { applyEvent, buildView, startLive, type Live } from './live';
+import { useTheme } from './theme';
 
 type Mode = 'todos' | 'selecionar';
 type Tab = 'avaliar' | 'historico';
@@ -36,6 +37,15 @@ const AVULSO = 'avulso';
 
 const SERIGY_URL = 'https://serigy.tce.se.gov.br/';
 const AUTOR = { nome: 'Bruno Lima', url: 'https://github.com/brunolimame' };
+
+/** Marca do GitHub (os ícones de marcas não vêm mais no lucide-react). */
+function GithubIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 16 16" aria-hidden="true" fill="currentColor" className={cn('size-3.5', className)}>
+      <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z" />
+    </svg>
+  );
+}
 
 const link = 'font-medium underline underline-offset-2 hover:no-underline';
 const STORAGE_KEY = 'avaliador.portalId';
@@ -49,6 +59,7 @@ const remembered = (): string | null => {
 };
 
 export function App() {
+  const { theme, toggle: toggleTheme } = useTheme();
   const [poderes, setPoderes] = useState<PoderInfo[]>([]);
   const [portais, setPortais] = useState<Portal[]>([]);
   const [portalId, setPortalId] = useState<string>(AVULSO);
@@ -245,7 +256,7 @@ export function App() {
         {saveState === 'saving' ? 'Salvando…' : saveState === 'saved' ? 'Salva no histórico' : 'Salvar avaliação'}
       </Button>
       {saveState === 'duplicate' && (
-        <span className="flex items-center gap-1.5 text-xs text-amber-700">
+        <span className="flex items-center gap-1.5 text-xs text-amber-700 dark:text-amber-300">
           Já está no histórico.
           {duplicateId && (
             <Button type="button" size="xs" variant="link" onClick={() => void openSaved(duplicateId)}>
@@ -272,25 +283,37 @@ export function App() {
           type="button"
           variant="outline"
           size="sm"
-          className="border-white/30 bg-white/10 text-white hover:bg-white/20 hover:text-white"
+          className="border-white/30 bg-white/10 text-white hover:bg-white/20 hover:text-white dark:bg-white/10 dark:hover:bg-white/10"
           onClick={() => setShowSettings(true)}
           title="Configurações (Ctrl+, ou Cmd+,)"
         >
           <Settings />
           Configurações
         </Button>
+        <Button
+          type="button"
+          variant="outline"
+          size="icon-sm"
+          className="border-white/30 bg-white/10 text-white hover:bg-white/20 hover:text-white"
+          onClick={toggleTheme}
+          title={theme === 'dark' ? 'Mudar para o tema claro' : 'Mudar para o tema escuro'}
+          aria-label={theme === 'dark' ? 'Mudar para o tema claro' : 'Mudar para o tema escuro'}
+        >
+          {theme === 'dark' ? <Sun /> : <Moon />}
+        </Button>
       </header>
 
-      <Alert className="shrink-0 border-amber-200 bg-amber-50/80 text-amber-950">
-        <Info className="text-amber-600" />
-        <AlertTitle>Ferramenta de apoio ao desenvolvimento</AlertTitle>
-        <AlertDescription className="text-amber-950/90">
-          Este avaliador ajuda a conferir o mapeamento da marcação do portal durante o desenvolvimento, antes da validação oficial. Ele{' '}
-          <strong>não substitui</strong> a validação realizada pelo Serigy: o resultado que vale é o do{' '}
+      <Alert className="shrink-0 border-amber-200 bg-amber-50/80 text-amber-950 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-200">
+        <Info className="text-amber-600 dark:text-amber-400" />
+        <AlertTitle>Ferramenta de análise SERIGY</AlertTitle>
+        <AlertDescription className="text-amber-950/90 dark:text-amber-200">
+          Está é uma ferramenta de análise com o objetivo de poiar o desenvolvimento: verifica o mapeamento da marcação Serigy do portal contra a matriz de requisitos
+          e ajuda a corrigir o que falta antes da validação oficial. Ela <strong>não substitui</strong> a validação realizada pelo Serigy; o
+          resultado que vale é o do{' '}
           <a href={SERIGY_URL} target="_blank" rel="noreferrer" className={link}>
             Serigy do TCE-SE
-          </a>
-          . Desenvolvido por{' '}
+          </a>.<br/>
+          Desenvolvido por{' '}
           <a href={AUTOR.url} target="_blank" rel="noreferrer" className={link}>
             {AUTOR.nome}
           </a>
@@ -451,7 +474,7 @@ export function App() {
                           </span>
                         );
                       })()}
-                      <Button type="button" size="xs" variant="outline" className="ml-auto bg-white" onClick={() => setShowSelector(true)}>
+                      <Button type="button" size="xs" variant="outline" className="ml-auto bg-white dark:bg-white/10" onClick={() => setShowSelector(true)}>
                         Selecionar itens…
                       </Button>
                     </div>
@@ -513,13 +536,13 @@ export function App() {
               onChange={() => undefined}
               readOnly
               banner={
-                <div className="flex flex-wrap items-center gap-2 rounded-lg border border-l-4 border-l-blue-400 bg-blue-50/80 px-4 py-2.5 text-sm">
-                  <History className="size-4 text-blue-600" />
+                <div className="flex flex-wrap items-center gap-2 rounded-lg border border-l-4 border-l-blue-400 bg-blue-50/80 px-4 py-2.5 text-sm dark:bg-blue-950/40">
+                  <History className="size-4 text-blue-600 dark:text-blue-400" />
                   <span className="font-medium">Avaliação do histórico</span>
                   <span className="text-muted-foreground">avaliada em {formatDateTime(opened.resumo.avaliadaEm)}</span>
                   {opened.resumo.origem === 'importada' && <Badge variant="secondary">Importada</Badge>}
                   <span className="text-xs text-muted-foreground">somente leitura — para reavaliar, faça uma nova avaliação</span>
-                  <Button type="button" size="xs" variant="outline" className="ml-auto bg-white" onClick={() => setOpened(null)}>
+                  <Button type="button" size="xs" variant="outline" className="ml-auto bg-white dark:bg-white/10" onClick={() => setOpened(null)}>
                     <ArrowLeft />
                     Fechar
                   </Button>
@@ -563,12 +586,13 @@ export function App() {
       />
 
       <footer className="fixed inset-x-0 bottom-0 z-40 border-t bg-background/95 px-4 py-2 text-center text-xs text-muted-foreground backdrop-blur">
-        Ferramenta de apoio ao desenvolvimento — não substitui a validação do{' '}
+        Ferramenta de análise em desenvolvimento — não substitui a validação do{' '}
         <a href={SERIGY_URL} target="_blank" rel="noreferrer" className="text-primary underline-offset-2 hover:underline">
           Serigy
         </a>{' '}
         · Desenvolvido por{' '}
-        <a href={AUTOR.url} target="_blank" rel="noreferrer" className="text-primary underline-offset-2 hover:underline">
+        <a href={AUTOR.url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-primary underline-offset-2 hover:underline">
+          <GithubIcon />
           {AUTOR.nome}
         </a>
       </footer>

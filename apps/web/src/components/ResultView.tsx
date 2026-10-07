@@ -41,35 +41,35 @@ const TONE: Record<ItemStatus, { label: string; row: string; chip: string; icon:
     row: 'border-emerald-200 bg-emerald-50/80 dark:border-emerald-900 dark:bg-emerald-950/30',
     chip: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/50 dark:text-emerald-200',
     icon: CircleCheck,
-    iconClass: 'text-emerald-600',
+    iconClass: 'text-emerald-600 dark:text-emerald-400',
   },
   warning: {
     label: 'Atenção',
     row: 'border-amber-200 bg-amber-50/80 dark:border-amber-900 dark:bg-amber-950/30',
     chip: 'bg-amber-100 text-amber-800 dark:bg-amber-900/50 dark:text-amber-200',
     icon: TriangleAlert,
-    iconClass: 'text-amber-600',
+    iconClass: 'text-amber-600 dark:text-amber-400',
   },
   empty: {
     label: 'serigyEmpty declarado',
     row: 'border-sky-200 bg-sky-50/80 dark:border-sky-900 dark:bg-sky-950/30',
     chip: 'bg-sky-100 text-sky-800 dark:bg-sky-900/50 dark:text-sky-200',
     icon: CircleMinus,
-    iconClass: 'text-sky-600',
+    iconClass: 'text-sky-600 dark:text-sky-400',
   },
   missing: {
     label: 'Não encontrado',
     row: 'border-rose-200 bg-rose-50/80 dark:border-rose-900 dark:bg-rose-950/30',
     chip: 'bg-rose-100 text-rose-800 dark:bg-rose-900/50 dark:text-rose-200',
     icon: CircleX,
-    iconClass: 'text-rose-600',
+    iconClass: 'text-rose-600 dark:text-rose-400',
   },
 };
 
 const PENDING_TONE: Record<PendingState, { label: string; row: string; chip: string }> = {
-  waiting: { label: 'Aguardando…', row: 'border-slate-200 bg-slate-50/70 dark:bg-slate-900/30', chip: 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300' },
+  waiting: { label: 'Aguardando…', row: 'border-slate-200 bg-slate-50/70 dark:bg-slate-900/30 dark:border-slate-900', chip: 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300' },
   running: { label: 'Analisando…', row: 'border-blue-200 bg-blue-50/80 dark:border-blue-900 dark:bg-blue-950/30', chip: 'bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-200' },
-  skipped: { label: 'Não analisado', row: 'border-slate-200 bg-slate-50/70 dark:bg-slate-900/30', chip: 'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400' },
+  skipped: { label: 'Não analisado', row: 'border-slate-200 bg-slate-50/70 dark:bg-slate-900/30 dark:border-slate-900', chip: 'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400' },
 };
 
 function Spinner({ className, label }: { className?: string; label?: string }) {
@@ -92,7 +92,7 @@ function PendingIcon({ wait }: { wait: PendingState }) {
   return (
     <Spinner
       label={wait === 'running' ? 'Analisando' : 'Aguardando na fila'}
-      className={cn('mt-0.5 size-5 shrink-0', wait === 'running' ? 'text-blue-600' : 'text-slate-400')}
+      className={cn('mt-0.5 size-5 shrink-0', wait === 'running' ? 'text-blue-600 dark:text-blue-400' : 'text-slate-400')}
     />
   );
 }
@@ -120,11 +120,11 @@ function SummaryStats({ s }: { s: Summary }) {
         icon={CircleCheck}
         color={s.total > 0 ? SCORE_STYLE[scoreTone(s.score)].text : 'text-primary'}
       />
-      <Stat label="Itens avaliados" value={s.total} icon={Clock} color="text-slate-700" />
-      <Stat label="Atendidos" value={s.ok} icon={CircleCheck} color="text-emerald-700" />
-      <Stat label="Atenção" value={s.warning} icon={TriangleAlert} color="text-amber-700" />
-      <Stat label="serigyEmpty declarados" value={s.empty} icon={CircleMinus} color="text-sky-700" />
-      <Stat label="Não encontrados" value={s.missing} icon={CircleX} color="text-rose-700" />
+      <Stat label="Itens avaliados" value={s.total} icon={Clock} color="text-slate-700 dark:text-slate-300" />
+      <Stat label="Atendidos" value={s.ok} icon={CircleCheck} color="text-emerald-700 dark:text-emerald-300" />
+      <Stat label="Atenção" value={s.warning} icon={TriangleAlert} color="text-amber-700 dark:text-amber-300" />
+      <Stat label="serigyEmpty declarados" value={s.empty} icon={CircleMinus} color="text-sky-700 dark:text-sky-300" />
+      <Stat label="Não encontrados" value={s.missing} icon={CircleX} color="text-rose-700 dark:text-rose-300" />
     </div>
   );
 }
@@ -148,9 +148,9 @@ function UrlList({ urls }: { urls: string[] }) {
 
 /** Ícone do nível de atendimento do grupo/página (mesmos ícones e cores dos itens: ok, atenção e não encontrado). */
 const SCORE_ICON: Record<ScoreTone, { icon: LucideIcon; className: string; label: string }> = {
-  green: { icon: CircleCheck, className: 'text-emerald-600', label: 'Atendimento total' },
-  amber: { icon: TriangleAlert, className: 'text-amber-600', label: 'Atendimento parcial' },
-  red: { icon: CircleX, className: 'text-rose-600', label: 'Atendimento baixo' },
+  green: { icon: CircleCheck, className: 'text-emerald-600 dark:text-emerald-400', label: 'Atendimento total' },
+  amber: { icon: TriangleAlert, className: 'text-amber-600 dark:text-amber-400', label: 'Atendimento parcial' },
+  red: { icon: CircleX, className: 'text-rose-600 dark:text-rose-400', label: 'Atendimento baixo' },
 };
 
 /** Selo do percentual de atendimento: < 40% vermelho, de 40% a < 100% amarelo, 100% verde. */
@@ -173,12 +173,12 @@ function SectionScore({ items, pending, busy }: { items: ItemResult[]; pending?:
 /** Selo do status do schema (verde = confere, rosa = não confere); o mesmo na linha do item e nos detalhes. */
 function SchemaBadge({ confere }: { confere: boolean }) {
   return confere ? (
-    <Badge variant="outline" className="border-emerald-300 bg-emerald-100 text-emerald-800">
+    <Badge variant="outline" className="border-emerald-300 bg-emerald-100 text-emerald-800 dark:border-emerald-800 dark:bg-emerald-900/50 dark:text-emerald-200">
       <CircleCheck />
       Confere
     </Badge>
   ) : (
-    <Badge variant="outline" className="border-rose-300 bg-rose-100 text-rose-800">
+    <Badge variant="outline" className="border-rose-300 bg-rose-100 text-rose-800 dark:border-rose-800 dark:bg-rose-900/50 dark:text-rose-200">
       <CircleX />
       Não confere
     </Badge>
@@ -566,7 +566,7 @@ export function ResultView({ result, onChange, pending, progress, onCancel, read
 
       <div className="space-y-3">
       {progress && isLive && (
-        <Card size="sm" role="status" aria-live="polite" className="border-blue-200">
+        <Card size="sm" role="status" aria-live="polite" className="border-blue-200 dark:border-blue-900">
           <CardContent className="space-y-2">
             <div className="flex items-center gap-2 text-sm">
               {running && <Spinner className="text-primary" />}
@@ -574,7 +574,7 @@ export function ResultView({ result, onChange, pending, progress, onCancel, read
                 {running ? 'Analisando' : 'Interrompida'}: {progress.done} de {progress.total} itens concluídos
               </span>
               {onCancel && (
-                <Button type="button" size="xs" variant="outline" className="ml-auto bg-white" onClick={onCancel}>
+                <Button type="button" size="xs" variant="outline" className="ml-auto bg-white dark:bg-white/10" onClick={onCancel}>
                   <X />
                   Cancelar
                 </Button>
@@ -596,8 +596,8 @@ export function ResultView({ result, onChange, pending, progress, onCancel, read
 
       {result.warnings.length > 0 && (
         <Collapsible open={warningsOpen} onOpenChange={setWarningsOpen}>
-          <Alert className="border-amber-200 bg-amber-50/80">
-            <TriangleAlert className="text-amber-600" />
+          <Alert className="border-amber-200 bg-amber-50/80 dark:border-amber-900 dark:bg-amber-950/40">
+            <TriangleAlert className="text-amber-600 dark:text-amber-400" />
             <AlertTitle>
               <CollapsibleTrigger className="flex items-center gap-1 text-left">
                 <ChevronRight className={cn('size-4 transition-transform', warningsOpen && 'rotate-90')} />
@@ -608,7 +608,7 @@ export function ResultView({ result, onChange, pending, progress, onCancel, read
             <AlertDescription>
               <CollapsibleContent>
                 {/* Lista rolável: pode haver dezenas de falhas */}
-                <ScrollArea className="mt-1 max-h-40 rounded-md border bg-white/80">
+                <ScrollArea className="mt-1 max-h-40 rounded-md border bg-white/80 dark:bg-white/10">
                   <ul className="space-y-1.5 p-2 text-xs">
                     {result.warnings.map((w) => (
                       <li key={w} className="break-all">
@@ -625,7 +625,7 @@ export function ResultView({ result, onChange, pending, progress, onCancel, read
 
       <div className="flex flex-wrap gap-2">
         {(['all', 'missing', 'warning', 'empty', 'ok'] as const).map((f) => (
-          <Button key={f} type="button" size="sm" variant={filter === f ? 'default' : 'outline'} className={filter === f ? '' : 'bg-white'} onClick={() => setFilter(f)}>
+          <Button key={f} type="button" size="sm" variant={filter === f ? 'default' : 'outline'} className={filter === f ? '' : 'bg-white dark:bg-white/10'} onClick={() => setFilter(f)}>
             {f === 'all' ? 'Todos' : TONE[f].label}
           </Button>
         ))}
@@ -654,7 +654,7 @@ export function ResultView({ result, onChange, pending, progress, onCancel, read
                     {p.label}
                   </Badge>
                   {reevaluatingInvoker && (
-                    <Button type="button" size="xs" variant="outline" className="bg-white/80" disabled>
+                    <Button type="button" size="xs" variant="outline" className="bg-white/80 dark:bg-white/10" disabled>
                       <Spinner />
                       Reavaliando…
                     </Button>
@@ -685,7 +685,7 @@ export function ResultView({ result, onChange, pending, progress, onCancel, read
                     type="button"
                     size="xs"
                     variant="outline"
-                    className="bg-white/80"
+                    className="bg-white/80 dark:bg-white/10"
                     onClick={reevaluateInvoker}
                     disabled={reevaluatingInvoker || reevaluating !== null || reevaluatingGroup !== null}
                   >
@@ -777,7 +777,7 @@ export function ResultView({ result, onChange, pending, progress, onCancel, read
                     type="button"
                     size="xs"
                     variant="outline"
-                    className="bg-white/80"
+                    className="bg-white/80 dark:bg-white/10"
                     onClick={() => reevaluateGroup(group.number, allItems.map((i) => i.id))}
                     disabled={reevaluating !== null || reevaluatingGroup !== null}
                   >
@@ -835,7 +835,7 @@ export function ResultView({ result, onChange, pending, progress, onCancel, read
                                     {t.label}
                                   </Badge>
                                   {busy && (
-                                    <Button type="button" size="xs" variant="outline" className="bg-white/80" disabled>
+                                    <Button type="button" size="xs" variant="outline" className="bg-white/80 dark:bg-white/10" disabled>
                                       {reevaluating === i.id ? <Spinner /> : <RefreshCw />}
                                       {reevaluating === i.id ? 'Reavaliando…' : 'Reavaliar'}
                                     </Button>
@@ -904,7 +904,7 @@ export function ResultView({ result, onChange, pending, progress, onCancel, read
                                       type="button"
                                       size="xs"
                                       variant="outline"
-                                      className="bg-white/80"
+                                      className="bg-white/80 dark:bg-white/10"
                                       onClick={() => reevaluate(i.id)}
                                       disabled={reevaluating !== null || reevaluatingGroup !== null || isLive}
                                     >
@@ -913,7 +913,7 @@ export function ResultView({ result, onChange, pending, progress, onCancel, read
                                     </Button>
                                   )}
                                   {hasDetails && (
-                                    <CollapsibleTrigger className="flex items-center gap-1 rounded-md px-1.5 py-0.5 text-xs text-primary hover:bg-white/70">
+                                    <CollapsibleTrigger className="flex items-center gap-1 rounded-md px-1.5 py-0.5 text-xs text-primary hover:bg-white/70 dark:hover:bg-white/10">
                                       <ChevronRight className={cn('size-3.5 transition-transform', detailsOpen && 'rotate-90')} />
                                       Detalhes
                                     </CollapsibleTrigger>

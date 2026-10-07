@@ -143,7 +143,7 @@ export function HistoryPanel({ items, portais, openId, onOpen, onChanged, onRemo
                 </ul>
               )}
               {duplicateId && (
-                <Button type="button" size="xs" variant="outline" className="mt-1 bg-white" onClick={() => onOpen(duplicateId)}>
+                <Button type="button" size="xs" variant="outline" className="mt-1 bg-white dark:bg-white/10" onClick={() => onOpen(duplicateId)}>
                   Abrir a avaliação existente
                 </Button>
               )}
@@ -153,7 +153,7 @@ export function HistoryPanel({ items, portais, openId, onOpen, onChanged, onRemo
       )}
 
       {offer && (
-        <Alert className="border-blue-200 bg-blue-50/80">
+        <Alert className="border-blue-200 bg-blue-50/80 dark:border-blue-900 dark:bg-blue-950/40">
           <AlertTitle>Portal não cadastrado</AlertTitle>
           <AlertDescription>
             <span className="break-all">{offer.portalUrl}</span> não está na lista de portais. Cadastrar para poder avaliá-lo de novo?
@@ -161,7 +161,7 @@ export function HistoryPanel({ items, portais, openId, onOpen, onChanged, onRemo
               <Button type="button" size="xs" disabled={busy} onClick={() => void registerPortal(offer)}>
                 Cadastrar portal
               </Button>
-              <Button type="button" size="xs" variant="outline" className="bg-white" onClick={() => setOffer(null)}>
+              <Button type="button" size="xs" variant="outline" className="bg-white dark:bg-white/10" onClick={() => setOffer(null)}>
                 Agora não
               </Button>
             </span>
