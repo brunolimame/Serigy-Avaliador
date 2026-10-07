@@ -12,7 +12,7 @@ import type {
   SectionResult,
   StreamEvent,
 } from '@serigy/shared';
-import { summarize } from '@serigy/shared';
+import { DEFAULT_MAX_PAGES, summarize } from '@serigy/shared';
 import { getPoder, loadCatalog, pagesForPoder } from '../catalog/load';
 import { describeExpected, validateType } from './checks';
 import { PageStore, urlKey } from './collector';
@@ -359,7 +359,7 @@ export function prepareEvaluation(req: EvaluationRequest, deps: EvaluateDeps = {
   if (selected.length === 0) throw new EvaluationError('Nenhum item selecionado para avaliação');
 
   const portal = url.href;
-  const maxPages = Math.min(req.maxPages ?? 200, 200);
+  const maxPages = Math.min(req.maxPages ?? DEFAULT_MAX_PAGES, 200);
   const tryDocumentedCase = req.tryDocumentedCase ?? false;
   const docUrl = (s: CatalogSection) => documentedUrl(portal, s.caminhoUrl);
   const itemCount = selected.reduce((n, p) => n + p.sections.reduce((m, s) => m + s.items.length, 0), 0);

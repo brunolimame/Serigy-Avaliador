@@ -1,12 +1,9 @@
 import type { DatabaseSync } from 'node:sqlite';
+import { HttpError } from '../errors';
 import { AMBIENTES, PODERES, type Portal, type PortalInput } from '@serigy/shared';
 
 /** Erro de regra de negócio do cadastro (a API responde com `status`). */
-export class PortalError extends Error {
-  constructor(message: string, readonly status: 400 | 404 | 409) {
-    super(message);
-  }
-}
+export class PortalError extends HttpError {}
 
 interface Row {
   id: number;

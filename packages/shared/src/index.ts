@@ -124,7 +124,7 @@ export interface EvaluationRequest {
   pages?: string[];
   /** Restringe a avaliação a estes itens (ids, ex.: "4.1.11"). Vazio/ausente = todos. */
   items?: string[];
-  /** Máximo de páginas HTML baixadas na avaliação (padrão 40). */
+  /** Máximo de páginas seguidas por serigyLink na avaliação (padrão: configuração, 40). */
   maxPages?: number;
   /**
    * Os caminhos da documentação (ex.: `/Despesas`) são testados SEMPRE em minúsculas. Se `true`, quando a
@@ -414,4 +414,129 @@ export function groupPagesByNumber<P extends { number: string; title: string; se
   const list = [...groups.values()];
   for (const g of list) g.sections.sort((a, b) => compareIds(a.id, b.id));
   return list.sort((a, b) => compareIds(a.number, b.number));
+}
+
+// ---------------------------------------------------------------------------
+// Configurações da aplicação (SQLite) — gerais, valem para todas as avaliações
+// ---------------------------------------------------------------------------
+
+/** Padrão do máximo de páginas seguidas por serigyLink (total por avaliação, somando todas as cadeias). */
+export const DEFAULT_MAX_PAGES = 40;
+
+export type SettingValue = boolean | number;
+
+/**
+ * Categorias do painel de configurações (estilo VS Code). `portais` e `historico` têm telas próprias;
+ * as demais são geradas a partir de SETTINGS.
+ */
+export type SettingCategory = 'portais' | 'comportamento' | 'historico';
+
+export const SETTING_CATEGORIES: Array<{ id: SettingCategory; label: string; descricao: string }> = [
+  { id: 'portais', label: 'Portais', descricao: 'Cadastro dos portais da transparência (URL, poder e ambiente).' },
+  { id: 'comportamento', label: 'Comportamento', descricao: 'Como as avaliações coletam e analisam as páginas.' },
+  { id: 'historico', label: 'Histórico', descricao: 'Avaliações salvas e importadas.' },
+];
+
+export interface SettingDef {
+  /** Chave única: "<categoria>.<nome>". */
+  chave: string;
+  categoria: SettingCategory;
+  tipo: 'boolean' | 'number';
+  padrao: SettingValue;
+  rotulo: string;
+  descricao: string;
+  min?: number;
+  max?: number;
+}
+
+/**
+ * Catálogo das configurações. Para criar uma nova, acrescente uma entrada aqui: a API valida pelo tipo/faixa e o
+ * painel desenha o controle sozinho.
+ */
+export const SETTINGS: SettingDef[] = [
+  {
+    chave: 'comportamento.navegador',
+    categoria: 'comportamento',
+    tipo: 'boolean',
+    padrao: true,
+    rotulo: 'Abrir as páginas em um navegador (executa JavaScript)',
+    descricao:
+      'Recomendado: páginas reativas só mostram os resultados depois de carregar scripts, e o navegador se apresenta como um acesso comum. Desmarcado, apenas o HTML é baixado (mais rápido, sem JavaScript).',
+  },
+  {
+    chave: 'comportamento.maxPaginasSerigyLink',
+    categoria: 'comportamento',
+    tipo: 'number',
+    padrao: DEFAULT_MAX_PAGES,
+    min: 1,
+    max: 200,
+    rotulo: 'Máx. de páginas seguidas por serigyLink',
+    descricao:
+      'Total de páginas baixadas por serigyLink em uma avaliação, somando todas as cadeias (A → B → C gasta 3). Não é a profundidade da cadeia. As páginas dos caminhos da documentação não entram nesse limite.',
+  },
+  {
+    chave: 'comportamento.testarGrafiaDocumentacao',
+    categoria: 'comportamento',
+    tipo: 'boolean',
+    padrao: false,
+    rotulo: 'Testar também a grafia da documentação (com maiúsculas)',
+    descricao:
+      'Os caminhos (ex.: /Despesas) são testados sempre em minúsculas (/despesas). Com esta opção, se a minúscula falhar (404 ou outro erro), a grafia da documentação também é testada.',
+  },
+];
+
+export interface SettingsResponse {
+  definicoes: SettingDef[];
+  /** Valor efetivo de cada chave (o salvo ou, na falta, o padrão). */
+  valores: Record<string, SettingValue>;
+  /** Chaves com valor salvo diferente do padrão. */
+  modificadas: string[];
+}
+
+// ---------------------------------------------------------------------------
+// Histórico de avaliações (SQLite) e arquivo de exportação/importação
+// ---------------------------------------------------------------------------
+
+export type AvaliacaoOrigem = 'local' | 'importada';
+
+/** Linha da lista do histórico (sem o resultado completo). */
+export interface AvaliacaoResumo {
+  id: number;
+  /** Quando foi salva (ou importada) neste computador. */
+  criadoEm: string;
+  origem: AvaliacaoOrigem;
+  /** Quando a avaliação terminou (`finishedAt` do resultado). */
+  avaliadaEm: string;
+  portalNome?: string;
+  portalUrl: string;
+  portalAmbiente?: Ambiente;
+  poder: PoderId;
+  poderLabel: string;
+  summary: Summary;
+}
+
+export interface AvaliacaoDetalhe {
+  resumo: AvaliacaoResumo;
+  resultado: EvaluationResult;
+  /** `generatedAt` do catálogo (matriz PNTP) vigente quando a avaliação foi salva. */
+  catalogoGeradoEm?: string;
+}
+
+/** Identificação do arquivo de exportação. */
+export const EXPORT_FORMAT = 'serigy-avaliacao';
+/** Versão do formato. Aumente ao mudar a estrutura de `resultado` (importadores antigos recusam versões maiores). */
+export const EXPORT_VERSION = 1;
+
+/**
+ * Arquivo JSON de uma avaliação, para guardar ou enviar a outra pessoa. O `hash` (SHA-256 do `resultado`
+ * canônico) detecta arquivo corrompido ou editado, mas NÃO prova autoria (assinatura digital: opção futura).
+ */
+export interface AvaliacaoEnvelope {
+  formato: typeof EXPORT_FORMAT;
+  versao: number;
+  exportadoEm: string;
+  app: { nome: string; versao: string };
+  catalogo: { geradoEm: string };
+  hash: string;
+  resultado: EvaluationResult;
 }

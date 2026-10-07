@@ -21,6 +21,35 @@ const MIGRATIONS: string[] = [
    CREATE INDEX idx_portais_poder ON portais (poder);`,
   // v2 – ambiente do endereço (produção/desenvolvimento); os já cadastrados ficam como produção
   `ALTER TABLE portais ADD COLUMN ambiente TEXT NOT NULL DEFAULT 'producao';`,
+  // v3 – configurações gerais da aplicação (chave -> valor em JSON; só o que difere do padrão é guardado)
+  `CREATE TABLE configuracoes (
+     chave         TEXT PRIMARY KEY,
+     valor         TEXT NOT NULL,
+     atualizado_em TEXT NOT NULL
+   );`,
+  // v4 – histórico de avaliações completas (salvas ou importadas). O resultado fica compactado (gzip) em `payload`;
+  // as colunas de resumo servem para listar sem abrir cada resultado. `hash` evita guardar a mesma avaliação duas vezes.
+  `CREATE TABLE avaliacoes (
+     id                 INTEGER PRIMARY KEY AUTOINCREMENT,
+     criado_em          TEXT NOT NULL,
+     origem             TEXT NOT NULL CHECK (origem IN ('local', 'importada')),
+     avaliada_em        TEXT NOT NULL,
+     portal_nome        TEXT,
+     portal_url         TEXT NOT NULL,
+     portal_ambiente    TEXT,
+     poder              TEXT NOT NULL,
+     poder_label        TEXT NOT NULL,
+     total              INTEGER NOT NULL,
+     ok                 INTEGER NOT NULL,
+     warning            INTEGER NOT NULL,
+     empty              INTEGER NOT NULL,
+     missing            INTEGER NOT NULL,
+     score              REAL NOT NULL,
+     catalogo_gerado_em TEXT,
+     hash               TEXT NOT NULL UNIQUE,
+     payload            BLOB NOT NULL
+   );
+   CREATE INDEX idx_avaliacoes_avaliada_em ON avaliacoes (avaliada_em DESC);`,
 ];
 
 /** Abre (e cria, se preciso) o banco e aplica as migrações pendentes. `:memory:` serve para testes. */

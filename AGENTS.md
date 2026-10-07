@@ -1,7 +1,7 @@
 # AGENTS.md
 
 Guia operacional para agentes de IA (e pessoas) que trabalham neste repositório.
-Documentação de referência completa: [`docs/avaliador.md`](docs/avaliador.md). Este arquivo é o resumo
+Documentação de referência completa: [`docs/avaliador.md`](docs/avaliador.md). Plano de distribuição desktop (Electron, futuro): [`DISTRIBUICAO.md`](DISTRIBUICAO.md). Este arquivo é o resumo
 normativo — em caso de divergência, o código e `docs/avaliador.md` prevalecem; corrija o que estiver desatualizado.
 
 ## 1. Visão geral
@@ -25,7 +25,8 @@ apps/api/              Express 5, cheerio, zod, playwright-core, SQLite (node:sq
   scripts/build-catalog.ts   docs -> src/catalog/catalog.json
   src/catalog/               parse-docs.ts, load.ts, catalog.json (GERADO, versionado)
   src/evaluator/             collector, markup, checks, evaluate, loaders (http/browser)
-  src/db/                    cadastro de portais (migrações por PRAGMA user_version)
+  src/db/                    portais, configurações e histórico (migrações por PRAGMA user_version)
+  src/history/               validação (zod estrito), hash canônico e envelope de exportação/importação
   src/report/markdown.ts     relatório Markdown
   test/                      testes vitest
 apps/web/              React 19, Tailwind 4, Vite, shadcn/ui (estilo base-nova, Base UI)
@@ -66,7 +67,10 @@ podem ser corrigidos daqui**: registre a divergência no commit/PR e comunique o
 - Validação de entrada da API com **zod**. Erros de validação respondem HTTP 400 antes de abrir streams.
 - A UI só consome a API; o relatório Markdown é gerado **apenas** em `apps/api/src/report/markdown.ts` (sem templates duplicados).
 - Componentes de UI em `apps/web/src/components/ui/` vêm do CLI do shadcn (`pnpm dlx shadcn@latest add <componente>` dentro de `apps/web`); o estilo `base-nova` usa **Base UI**, não Radix.
-- Banco: nunca altere migrações já publicadas em `MIGRATIONS` (`db/database.ts`); acrescente uma nova.
+- Banco: nunca altere migrações já publicadas em `MIGRATIONS` (`db/database.ts`); acrescente uma nova (hoje v4).
+- Configurações: novas entradas em `SETTINGS` (`packages/shared`); padrão do máx. de páginas `serigyLink` = `DEFAULT_MAX_PAGES` (40).
+- Histórico: só avaliação completa; todo JSON importado passa por `history/schema.ts` + hash (`history/envelope.ts`). Mudou o formato exportado? Suba `EXPORT_VERSION`.
+- Testes não usam o banco real: `apps/api/vitest.config.ts` fixa `DATABASE_PATH=:memory:`. Em verificação manual use porta e banco próprios, nunca a API do usuário (3001).
 - Novos validadores de tipo: `VALIDATORS` em `checks.ts`, com o nome exatamente igual ao da coluna "Valor" da matriz.
 
 ## 6. Invariantes do avaliador (não quebrar)

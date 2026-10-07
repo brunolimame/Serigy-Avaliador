@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import {
   ChevronRight,
   CircleAlert,
@@ -276,9 +276,15 @@ interface Props {
   progress?: { done: number; total: number };
   /** Presente enquanto a avaliação está rodando. */
   onCancel?: () => void;
+  /** Avaliação do histórico: só leitura (sem reavaliar item/grupo). */
+  readOnly?: boolean;
+  /** Faixa informativa acima do resultado (ex.: data/hora de uma avaliação do histórico). */
+  banner?: ReactNode;
+  /** Botões extras no cabeçalho (ex.: salvar avaliação). */
+  actions?: ReactNode;
 }
 
-export function ResultView({ result, onChange, pending, progress, onCancel }: Props) {
+export function ResultView({ result, onChange, pending, progress, onCancel, readOnly, banner, actions }: Props) {
   const isLive = pending !== undefined;
   const running = onCancel !== undefined;
   const lastFetched = result.fetched.at(-1);
@@ -305,6 +311,19 @@ export function ResultView({ result, onChange, pending, progress, onCancel }: Pr
     setExportError(null);
     try {
       download(`avaliacao-serigy-${host}-${stamp}.md`, await api.reportMarkdown(result), 'text/markdown');
+    } catch (err) {
+      setExportError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  /** Arquivo JSON importável (com hash de integridade), gerado pela API. */
+  async function exportJson() {
+    setBusy(true);
+    setExportError(null);
+    try {
+      await api.avaliacoes.exportCurrent(result);
     } catch (err) {
       setExportError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -370,7 +389,8 @@ export function ResultView({ result, onChange, pending, progress, onCancel }: Pr
         <span className="text-sm text-muted-foreground">
           {result.poderLabel} · {result.scope.items} itens · {result.fetched.length} páginas analisadas
         </span>
-        <div className="ml-auto flex gap-2">
+        <div className="ml-auto flex flex-wrap gap-2">
+          {actions}
           <Button type="button" size="sm" onClick={exportMarkdown} disabled={busy || isLive}>
             <Download />
             Exportar Markdown
@@ -379,14 +399,15 @@ export function ResultView({ result, onChange, pending, progress, onCancel }: Pr
             type="button"
             size="sm"
             variant="outline"
-            disabled={isLive}
-            onClick={() => download(`avaliacao-serigy-${host}-${stamp}.json`, JSON.stringify(result, null, 2), 'application/json')}
+            disabled={busy || isLive}
+            onClick={exportJson}
           >
             <FileJson />
             JSON
           </Button>
         </div>
       </div>
+      {banner}
       {/* Identificação do portal e do ambiente (produção/desenvolvimento) */}
       {(result.portalNome || result.portalAmbiente) && (
         <div
@@ -421,6 +442,7 @@ export function ResultView({ result, onChange, pending, progress, onCancel }: Pr
         </Alert>
       )}
 
+      <div className="sticky top-0 z-20 -mx-2 space-y-3 bg-background/95 px-2 py-2 backdrop-blur">
       {progress && isLive && (
         <Card size="sm" role="status" aria-live="polite" className="border-blue-200">
           <CardContent className="space-y-2">
@@ -448,6 +470,7 @@ export function ResultView({ result, onChange, pending, progress, onCancel }: Pr
       )}
 
       <SummaryStats s={result.summary} />
+      </div>
 
       <Alert
         variant={result.invoker.found ? 'default' : 'destructive'}
@@ -563,7 +586,7 @@ export function ResultView({ result, onChange, pending, progress, onCancel }: Pr
                 )}
               </CollapsibleTrigger>
               {/* Reavaliar todos os itens do grupo (não faz parte do gatilho de abrir/fechar) */}
-              {!isLive && (
+              {!isLive && !readOnly && (
                 <div className="shrink-0 pr-3">
                   <Button
                     type="button"
@@ -689,17 +712,19 @@ export function ResultView({ result, onChange, pending, progress, onCancel }: Pr
 
                                 <div className="flex shrink-0 flex-col items-end gap-1.5">
                                   <Badge className={cn('border-transparent', tone.chip)}>{tone.label}</Badge>
-                                  <Button
-                                    type="button"
-                                    size="xs"
-                                    variant="outline"
-                                    className="bg-white/80"
-                                    onClick={() => reevaluate(i.id)}
-                                    disabled={reevaluating !== null || reevaluatingGroup !== null || isLive}
-                                  >
-                                    {reevaluating === i.id ? <Spinner /> : <RefreshCw />}
-                                    {reevaluating === i.id ? 'Reavaliando…' : 'Reavaliar'}
-                                  </Button>
+                                  {!readOnly && (
+                                    <Button
+                                      type="button"
+                                      size="xs"
+                                      variant="outline"
+                                      className="bg-white/80"
+                                      onClick={() => reevaluate(i.id)}
+                                      disabled={reevaluating !== null || reevaluatingGroup !== null || isLive}
+                                    >
+                                      {reevaluating === i.id ? <Spinner /> : <RefreshCw />}
+                                      {reevaluating === i.id ? 'Reavaliando…' : 'Reavaliar'}
+                                    </Button>
+                                  )}
                                   {hasDetails && (
                                     <CollapsibleTrigger className="flex items-center gap-1 rounded-md px-1.5 py-0.5 text-xs text-primary hover:bg-white/70">
                                       <ChevronRight className={cn('size-3.5 transition-transform', detailsOpen && 'rotate-90')} />

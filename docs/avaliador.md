@@ -69,7 +69,7 @@ URL do portal ──▶ collector ──▶ markup (serigy*) ──▶ evaluate 
       erro); falhando as duas, o erro cita as duas tentativas. Padrão: desligada;
    3. destinos de `serigyLink` (iframe, ou elemento com `serigyItem`) **apenas** dos schemas/itens que estão sendo
       avaliados, a partir das páginas já baixadas (`shouldFollow`).
-   O limite `maxPages` (padrão 200, máx. 200) vale **só para páginas seguidas por `serigyLink`**; a URL inicial e as
+   O limite `maxPages` (padrão **40**, máx. 200; configurável em Configurações › Comportamento) vale **só para páginas seguidas por `serigyLink`**; a URL inicial e as
    páginas dos caminhos da documentação nunca são limitadas. Avaliar um único item baixa só a URL inicial e a página
    da sua seção.
    Cada URL é baixada uma única vez, mesmo que várias seções a usem.
@@ -94,7 +94,9 @@ URL do portal ──▶ collector ──▶ markup (serigy*) ──▶ evaluate 
 - Comportamento: ao terminar a análise, **páginas e detalhes dos itens ficam fechados** (só as páginas em análise
   abrem sozinhas durante o stream). O botão "Detalhes" de cada item não atendido mostra descrição, esperado,
   encontrado e exemplos. O alerta "usa iframe com serigyLink" aparece **dentro do item** que depende dele.
-  Largura máxima da página: 1600px.
+  Largura máxima da página: 1700px.
+- Layout em **2 colunas** (estilo CRM): à esquerda, abas "Nova avaliação" e "Histórico"; à direita, o resultado, com
+  a barra de estatísticas/progresso fixa no topo. Em telas estreitas vira coluna única.
 - Rolagem: a lista de avisos/falhas usa `ScrollArea` (altura máxima 12rem) e os exemplos HTML da documentação usam
   `<pre>` com `max-h-64 overflow-auto` (rolagem vertical e horizontal). O `ScrollArea` foi ajustado com
   `max-h-[inherit]` no viewport para funcionar com altura máxima.
@@ -122,8 +124,53 @@ Os portais a avaliar ficam cadastrados em um banco **SQLite**, cada um com **nom
 - **API:** `GET /api/portais`, `POST /api/portais`, `PUT /api/portais/:id`, `DELETE /api/portais/:id` (204).
   Corpo: `{ "nome", "url", "poder", "ambiente" }`. Erros: 400 (nome, URL ou poder inválidos), 404, 409 (URL repetida).
   `POST /api/evaluate*` aceita `portalNome` e `portalAmbiente` (só identificam a avaliação no resultado e no relatório).
-- **Interface:** "Gerenciar portais" (cabeçalho) abre o cadastro (novo/editar/excluir com confirmação); o último portal
+- **Interface:** o cadastro fica em Configurações › Portais (novo/editar/excluir com confirmação); o último portal
   escolhido é lembrado no navegador (`localStorage`).
+
+## Configurações gerais (SQLite)
+
+Janela estilo VS Code (botão "Configurações" ou **Ctrl+,** / **Cmd+,**; Esc fecha) com categorias **Portais**,
+**Comportamento** e **Histórico**. Valem para toda a aplicação (não por portal).
+
+- **Catálogo:** `SETTINGS` em `packages/shared/src/index.ts` (chave `<categoria>.<nome>`, tipo, padrão, faixa). Para criar
+  uma configuração, acrescente uma entrada: a API valida pelo tipo/faixa e o painel desenha o controle sozinho.
+- **Configurações atuais:** `comportamento.navegador` (padrão ligado), `comportamento.maxPaginasSerigyLink` (padrão
+  **40**, 1–200) e `comportamento.testarGrafiaDocumentacao` (padrão desligado).
+- **Persistência:** tabela `configuracoes(chave PK, valor, atualizado_em)`; só valores diferentes do padrão são gravados
+  (restaurar = apagar a linha). `SettingsRepo` em `apps/api/src/db/settings.ts`.
+- **Aplicação:** `POST /api/evaluate*` usa o valor configurado para o que a requisição não informa (`renderer`,
+  `maxPages`, `tryDocumentedCase`); o valor explícito do corpo prevalece. No formulário, "Extras desta avaliação"
+  mostra o máx. de páginas começando no valor das configurações, valendo só para aquela execução.
+- **API:** `GET /api/configuracoes` (definições, valores, `modificadas`), `PUT /api/configuracoes/:chave` (`{valor}`),
+  `DELETE /api/configuracoes/:chave` (restaura uma), `DELETE /api/configuracoes` (restaura todas; não mexe em portais
+  nem no histórico). Erros: 400 (valor inválido), 404 (chave inexistente).
+
+## Histórico, exportação e importação
+
+Só **avaliações completas** (`scope.mode === 'todos'`) são salvas, por ação manual ("Salvar avaliação", habilitado após
+o fim da análise; reavaliar item/grupo invalida o "salvo"). Sem limite de quantidade: o usuário apaga um item ou
+todo o histórico (Configurações › Histórico, com confirmação).
+
+- **Tabela `avaliacoes`** (migração v4): colunas de resumo para a lista, `hash` UNIQUE (SHA-256 do JSON canônico do
+  resultado) e `payload` (resultado em gzip). A mesma avaliação não é guardada duas vezes: **409** com o `id` da existente
+  (a UI avisa e oferece abrir). Código: `apps/api/src/db/avaliacoes.ts` e `apps/api/src/history/`.
+- **Abrir:** a avaliação aberta do histórico mostra data/hora e todos os detalhes, mas é **somente leitura** (sem
+  Reavaliar item/grupo). Para reavaliar, faz-se uma nova avaliação.
+- **Exportar:** JSON importável (envelope abaixo) e relatório Markdown (o mesmo de `/api/report`).
+- **Envelope JSON** (`formato: "serigy-avaliacao"`, `versao: 1`): `exportadoEm`, `app {nome, versao}`,
+  `catalogo {geradoEm}`, `hash` e `resultado`. Mudança incompatível = nova `versao` (EXPORT_VERSION no shared); arquivos de
+  versão mais nova são recusados.
+- **Importar (somente JSON):** a API valida, nesta ordem, (1) estrutura do envelope sem chaves desconhecidas, (2) formato,
+  (3) versão, (4) o resultado inteiro com **zod estrito** (tipos, enums, limites de tamanho, URLs http(s), ids de item) e
+  **consistência** (escopo completo, datas, contagens, ids únicos, `summary` recalculado), (5) o **hash**. Falha = 400 com
+  `{error, problemas[]}`. O conteúdo importado nunca é interpretado como HTML (a UI só exibe texto). Entra com
+  `origem: "importada"`. Se o portal da URL não está cadastrado, a UI oferece cadastrá-lo.
+- **Limite do hash:** detecta arquivo corrompido ou editado à mão, **não prova autoria** (quem edita pode recalcular o
+  hash). Assinatura digital é uma opção futura (ver `DISTRIBUICAO.md`).
+- **API:** `GET /api/avaliacoes`, `GET /api/avaliacoes/:id`, `POST /api/avaliacoes` (salvar o resultado atual),
+  `DELETE /api/avaliacoes/:id`, `DELETE /api/avaliacoes?confirmar=sim`, `GET /api/avaliacoes/:id/exportar?formato=json|md`,
+  `POST /api/avaliacoes/exportar` (envelope do resultado atual, salvo ou não), `POST /api/avaliacoes/importar`.
+  O corpo JSON aceita até 30 MB.
 
 ## Navegador embutido (renderização de páginas reativas)
 
@@ -327,13 +374,14 @@ Corpo de `POST /api/evaluate`:
   "poder": "executivo",
   "pages": ["comum/despesas"],
   "items": ["4.1.1", "4.1.2"],
-  "maxPages": 200,
+  "maxPages": 40,
   "tryDocumentedCase": false,
   "renderer": "browser"
 }
 ```
 
-`pages` e `items` são opcionais; ausentes = todos os itens do poder. Se ambos vierem, vale a interseção.
+`pages`, `items`, `maxPages`, `tryDocumentedCase` e `renderer` são opcionais: os três últimos, se ausentes, vêm das
+configurações gerais. Sem `pages`/`items` = todos os itens do poder. Se ambos vierem, vale a interseção.
 Erros: `400` (parâmetros, escopo que não se aplica ao poder), `502` (portal inacessível).
 Os tipos completos estão em `packages/shared/src/index.ts`.
 

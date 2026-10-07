@@ -1,22 +1,35 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { CircleAlert, Play, Settings2 } from 'lucide-react';
-import type { CatalogPage, EvaluationResult, PoderId, PoderInfo, Portal } from '@serigy/shared';
-import { api } from './api';
+import { ArrowLeft, CircleAlert, CircleCheck, History, Play, Save, Settings } from 'lucide-react';
+import type {
+  AvaliacaoDetalhe,
+  AvaliacaoResumo,
+  CatalogPage,
+  EvaluationResult,
+  PoderId,
+  PoderInfo,
+  Portal,
+  SettingsResponse,
+} from '@serigy/shared';
+import { api, ApiError } from './api';
 import { AmbienteBadge } from './components/AmbienteBadge';
+import { formatDateTime, HistoryPanel } from './components/HistoryPanel';
 import { ItemSelector } from './components/ItemSelector';
-import { PortalManager } from './components/PortalManager';
 import { ResultView } from './components/ResultView';
+import { SettingsPanel } from './components/SettingsPanel';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { cn } from '@/lib/utils';
 import { applyEvent, buildView, startLive, type Live } from './live';
 
 type Mode = 'todos' | 'selecionar';
+type Tab = 'avaliar' | 'historico';
+type SaveState = 'idle' | 'saving' | 'saved' | 'duplicate' | 'error';
 
 /** Valor do seletor para uma URL que não está cadastrada. */
 const AVULSO = 'avulso';
@@ -34,18 +47,23 @@ export function App() {
   const [poderes, setPoderes] = useState<PoderInfo[]>([]);
   const [portais, setPortais] = useState<Portal[]>([]);
   const [portalId, setPortalId] = useState<string>(AVULSO);
-  const [showManager, setShowManager] = useState(false);
+  const [settings, setSettings] = useState<SettingsResponse | null>(null);
+  const [showSettings, setShowSettings] = useState(false);
+  const [tab, setTab] = useState<Tab>('avaliar');
+  const [historico, setHistorico] = useState<AvaliacaoResumo[]>([]);
+  // Avaliação aberta a partir do histórico (somente leitura); tem precedência sobre o resultado atual na coluna direita.
+  const [opened, setOpened] = useState<AvaliacaoDetalhe | null>(null);
+  const [saveState, setSaveState] = useState<SaveState>('idle');
+  const [saveMessage, setSaveMessage] = useState<string | null>(null);
+  const [duplicateId, setDuplicateId] = useState<number | null>(null);
   // URL avulsa (quando nenhum portal cadastrado é selecionado)
   const [url, setUrl] = useState('');
   const [avulsoPoder, setAvulsoPoder] = useState<PoderId>('executivo');
   const [mode, setMode] = useState<Mode>('todos');
   const [pages, setPages] = useState<CatalogPage[]>([]);
   const [selected, setSelected] = useState<Set<string>>(new Set());
-  const [maxPages, setMaxPages] = useState(200);
-  // Por padrão os caminhos da documentação são testados só em minúsculas.
-  const [tryDocumentedCase, setTryDocumentedCase] = useState(false);
-  // Navegador real (executa JavaScript) por padrão; desmarcado = só baixa o HTML.
-  const [useBrowser, setUseBrowser] = useState(true);
+  // "Extra" desta avaliação: começa no valor das configurações e vale só para esta execução.
+  const [maxPagesOverride, setMaxPagesOverride] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<EvaluationResult | null>(null);
@@ -58,6 +76,8 @@ export function App() {
   const portal = portais.find((p) => String(p.id) === portalId);
   const targetUrl = portal ? portal.url : url.trim();
   const poder: PoderId = portal ? portal.poder : avulsoPoder;
+  const settingMaxPages = (settings?.valores['comportamento.maxPaginasSerigyLink'] as number | undefined) ?? 40;
+  const maxPages = maxPagesOverride ?? settingMaxPages;
 
   const loadPortais = useCallback(async (preferId?: number) => {
     try {
@@ -75,10 +95,20 @@ export function App() {
     }
   }, []);
 
+  const loadHistorico = useCallback(async () => {
+    try {
+      setHistorico(await api.avaliacoes.list());
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    }
+  }, []);
+
   useEffect(() => {
     api.poderes().then(setPoderes).catch((e: Error) => setError(e.message));
+    api.configuracoes.get().then(setSettings).catch((e: Error) => setError(e.message));
     void loadPortais();
-  }, [loadPortais]);
+    void loadHistorico();
+  }, [loadPortais, loadHistorico]);
 
   useEffect(() => {
     try {
@@ -88,11 +118,30 @@ export function App() {
     }
   }, [portalId]);
 
+  // Ctrl+, (Windows/Linux) ou Cmd+, (Mac) abre/fecha as configurações
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === ',') {
+        e.preventDefault();
+        setShowSettings((v) => !v);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+
   // O catálogo (comum + poder) muda com o poder; a seleção é reiniciada.
   useEffect(() => {
     setSelected(new Set());
     api.catalog(poder).then((c) => setPages(c.pages)).catch((e: Error) => setError(e.message));
   }, [poder]);
+
+  // Qualquer mudança no resultado atual (nova avaliação, reavaliação) invalida o "salvo"
+  useEffect(() => {
+    setSaveState('idle');
+    setSaveMessage(null);
+    setDuplicateId(null);
+  }, [result]);
 
   const canRun = targetUrl !== '' && !loading && (mode === 'todos' || selected.size > 0);
   const poderLabel = poderes.find((p) => p.id === poder)?.label;
@@ -109,6 +158,7 @@ export function App() {
     setError(null);
     setResult(null);
     setLive(null);
+    setOpened(null);
     try {
       await api.evaluateStream(
         {
@@ -117,9 +167,8 @@ export function App() {
           portalNome: portal?.nome,
           portalAmbiente: portal?.ambiente,
           items: mode === 'selecionar' ? [...selected] : undefined,
-          maxPages,
-          tryDocumentedCase,
-          renderer: useBrowser ? 'browser' : 'http',
+          // Só o "extra" desta avaliação; o resto (navegador, grafia) vem das configurações no servidor
+          maxPages: maxPagesOverride ?? undefined,
         },
         (event) => {
           if (event.type === 'plan') setLive(startLive(event.plan));
@@ -147,9 +196,65 @@ export function App() {
     abortRef.current?.abort();
   }
 
+  async function saveCurrent() {
+    if (!result) return;
+    setSaveState('saving');
+    setSaveMessage(null);
+    try {
+      await api.avaliacoes.save(result);
+      setSaveState('saved');
+      void loadHistorico();
+    } catch (e) {
+      if (e instanceof ApiError && e.status === 409) {
+        setSaveState('duplicate');
+        setDuplicateId(e.extra.id ?? null);
+      } else {
+        setSaveState('error');
+        setSaveMessage(e instanceof Error ? e.message : String(e));
+      }
+    }
+  }
+
+  async function openSaved(id: number) {
+    try {
+      setOpened(await api.avaliacoes.get(id));
+      setError(null);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    }
+  }
+
+  const complete = result?.scope.mode === 'todos';
+  const saveButton = result && !live && (
+    <>
+      <Button
+        type="button"
+        size="sm"
+        variant="outline"
+        disabled={!complete || saveState === 'saving' || saveState === 'saved'}
+        title={complete ? 'Salva esta avaliação no histórico' : 'Só avaliações completas (todos os itens) podem ser salvas'}
+        onClick={() => void saveCurrent()}
+      >
+        {saveState === 'saved' ? <CircleCheck /> : <Save />}
+        {saveState === 'saving' ? 'Salvando…' : saveState === 'saved' ? 'Salva no histórico' : 'Salvar avaliação'}
+      </Button>
+      {saveState === 'duplicate' && (
+        <span className="flex items-center gap-1.5 text-xs text-amber-700">
+          Já está no histórico.
+          {duplicateId && (
+            <Button type="button" size="xs" variant="link" onClick={() => void openSaved(duplicateId)}>
+              Abrir
+            </Button>
+          )}
+        </span>
+      )}
+      {saveState === 'error' && <span className="text-xs text-destructive">{saveMessage}</span>}
+    </>
+  );
+
   return (
-    <main className="mx-auto max-w-[1600px] space-y-6 p-4 sm:p-8">
-      <header className="flex flex-wrap items-center gap-4 rounded-xl border-b-4 border-blue-400 bg-blue-950 px-6 py-5 text-white shadow-sm">
+    <main className="mx-auto max-w-[1700px] space-y-5 p-4 sm:p-6">
+      <header className="flex flex-wrap items-center gap-4 rounded-xl border-b-4 border-blue-400 bg-blue-950 px-6 py-4 text-white shadow-sm">
         <div className="min-w-0 flex-1">
           <p className="text-xs font-medium uppercase tracking-widest text-blue-200">PNTP 2026 · Serigy</p>
           <h1 className="mt-1 text-2xl font-semibold tracking-tight">Avaliador de Portais da Transparência</h1>
@@ -162,182 +267,251 @@ export function App() {
           variant="outline"
           size="sm"
           className="border-white/30 bg-white/10 text-white hover:bg-white/20 hover:text-white"
-          onClick={() => setShowManager((v) => !v)}
+          onClick={() => setShowSettings(true)}
+          title="Configurações (Ctrl+, ou Cmd+,)"
         >
-          <Settings2 />
-          {showManager ? 'Fechar cadastro' : 'Gerenciar portais'}
+          <Settings />
+          Configurações
         </Button>
       </header>
 
-      {showManager && (
-        <PortalManager
-          portais={portais}
-          poderes={poderes}
-          onChanged={(savedId) => {
-            void loadPortais(savedId);
-          }}
-        />
-      )}
-
-      <form onSubmit={run}>
-        <Card>
-          <CardHeader>
-            <CardTitle>Nova avaliação</CardTitle>
-            <CardDescription>Selecione o portal cadastrado; os requisitos comuns valem para todos os poderes.</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-5">
-            <div className="space-y-1.5">
-              <Label>Portal da transparência</Label>
-              <Select value={portalId} onValueChange={(v) => v && setPortalId(v)} items={portalItems}>
-                <SelectTrigger className="w-full sm:max-w-xl">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {portais.map((p) => (
-                    <SelectItem key={p.id} value={String(p.id)}>
-                      <span className="flex items-center gap-2">
-                        {p.nome}
-                        <AmbienteBadge ambiente={p.ambiente} />
-                      </span>
-                    </SelectItem>
-                  ))}
-                  <SelectItem value={AVULSO}>URL avulsa (não cadastrada)</SelectItem>
-                </SelectContent>
-              </Select>
-              {portais.length === 0 && (
-                <p className="text-xs text-muted-foreground">Nenhum portal cadastrado: use “Gerenciar portais” para cadastrar, ou informe uma URL avulsa.</p>
-              )}
-            </div>
-
-            {portal ? (
-              <div className="flex flex-wrap items-center gap-x-4 gap-y-1 rounded-lg border bg-muted/40 px-3 py-2 text-sm">
-                <AmbienteBadge ambiente={portal.ambiente} />
-                <span>
-                  <span className="text-muted-foreground">Poder:</span> {poderLabel}
-                </span>
-                <a href={portal.url} target="_blank" rel="noreferrer" className="break-all text-primary hover:underline">
-                  {portal.url}
-                </a>
-              </div>
-            ) : (
-              <div className="grid gap-4 sm:grid-cols-[1fr_16rem]">
-                <div className="space-y-1.5">
-                  <Label htmlFor="url">URL do portal da transparência</Label>
-                  <Input
-                    id="url"
-                    type="url"
-                    required
-                    value={url}
-                    onChange={(e) => setUrl(e.target.value)}
-                    placeholder="https://transparencia.exemplo.gov.br/"
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    Raiz do portal (<code>[Portal da Transparencia]</code> na documentação); o caminho de cada seção é acrescentado a ela.
-                  </p>
-                </div>
-                <div className="space-y-1.5">
-                  <Label>Poder / esfera</Label>
-                  <Select
-                    value={avulsoPoder}
-                    onValueChange={(v) => v && setAvulsoPoder(v as PoderId)}
-                    items={poderes.map((p) => ({ value: p.id, label: p.label }))}
-                  >
-                    <SelectTrigger className="w-full">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {poderes.map((p) => (
-                        <SelectItem key={p.id} value={p.id}>
-                          {p.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-            )}
-
-            <div className="space-y-2">
-              <Label>O que avaliar</Label>
-              <RadioGroup value={mode} onValueChange={(v) => setMode(v as Mode)} className="flex flex-wrap gap-x-6 gap-y-2">
-                <label className="flex cursor-pointer items-center gap-2 text-sm">
-                  <RadioGroupItem value="todos" />
-                  Todos os itens (comuns + {poderLabel})
-                </label>
-                <label className="flex cursor-pointer items-center gap-2 text-sm">
-                  <RadioGroupItem value="selecionar" />
-                  Selecionar itens
-                </label>
-              </RadioGroup>
-            </div>
-
-            {mode === 'selecionar' && <ItemSelector pages={pages} selected={selected} onChange={setSelected} />}
-
-            <div className="space-y-3 rounded-lg border p-3">
-              <div className="text-sm font-medium">Opções</div>
-              <label className="flex cursor-pointer items-start gap-2 text-sm">
-                <Checkbox className="mt-0.5" checked={useBrowser} onCheckedChange={setUseBrowser} />
-                <span>
-                  Abrir as páginas em um navegador (executa JavaScript)
-                  <span className="block text-xs text-muted-foreground">
-                    Recomendado: páginas reativas só mostram os resultados depois de carregar scripts, e o navegador se apresenta como
-                    um acesso comum. Desmarcado, apenas o HTML é baixado (mais rápido, sem JavaScript).
-                  </span>
-                </span>
-              </label>
-              <label className="flex cursor-pointer items-start gap-2 text-sm">
-                <Checkbox className="mt-0.5" checked={tryDocumentedCase} onCheckedChange={setTryDocumentedCase} />
-                <span>
-                  Testar também a grafia da documentação (com maiúsculas)
-                  <span className="block text-xs text-muted-foreground">
-                    Os caminhos (ex.: <code>/Despesas</code>) são testados sempre em minúsculas (<code>/despesas</code>). Com esta opção
-                    marcada, se a minúscula falhar (404 ou outro erro), a grafia da documentação também é testada.
-                  </span>
-                </span>
-              </label>
-              <div className="flex items-center gap-2 text-sm">
-                <Label htmlFor="maxPages" className="font-normal">
-                  Máx. de páginas seguidas por serigyLink
-                </Label>
-                <Input
-                  id="maxPages"
-                  type="number"
-                  min={1}
-                  max={200}
-                  value={maxPages}
-                  onChange={(e) => setMaxPages(Number(e.target.value))}
-                  className="w-24"
-                />
-              </div>
-            </div>
-          </CardContent>
-          <div className="px-4 pb-4">
-            <Button type="submit" disabled={!canRun}>
-              <Play />
-              {loading ? 'Avaliando…' : 'Avaliar'}
-            </Button>
+      <div className="grid items-start gap-6 lg:grid-cols-[26rem_minmax(0,1fr)]">
+        {/* Coluna esquerda: nova avaliação / histórico */}
+        <aside className="space-y-3 lg:sticky lg:top-4 lg:max-h-[calc(100vh-2rem)] lg:overflow-y-auto lg:pr-1">
+          <div className="grid grid-cols-2 gap-1 rounded-lg bg-muted p-1" role="tablist">
+            {(
+              [
+                ['avaliar', 'Nova avaliação', Play],
+                ['historico', `Histórico (${historico.length})`, History],
+              ] as const
+            ).map(([id, label, Icon]) => (
+              <button
+                key={id}
+                type="button"
+                role="tab"
+                aria-selected={tab === id}
+                onClick={() => setTab(id)}
+                className={cn(
+                  'flex items-center justify-center gap-1.5 rounded-md px-2 py-1.5 text-sm',
+                  tab === id ? 'bg-background font-medium shadow-sm' : 'text-muted-foreground hover:text-foreground',
+                )}
+              >
+                <Icon className="size-3.5" />
+                {label}
+              </button>
+            ))}
           </div>
-        </Card>
-      </form>
 
-      {error && (
-        <Alert variant="destructive">
-          <CircleAlert />
-          <AlertTitle>Não foi possível concluir a avaliação</AlertTitle>
-          <AlertDescription>{error}</AlertDescription>
-        </Alert>
-      )}
+          {tab === 'historico' ? (
+            <HistoryPanel
+              items={historico}
+              portais={portais}
+              openId={opened?.resumo.id ?? null}
+              onOpen={(id) => void openSaved(id)}
+              onChanged={() => void loadHistorico()}
+              onRemoved={(id) => setOpened((o) => (o?.resumo.id === id ? null : o))}
+              onPortaisChanged={(id) => void loadPortais(id)}
+            />
+          ) : (
+            <form onSubmit={run}>
+              <Card>
+                <CardHeader>
+                  <CardTitle>Nova avaliação</CardTitle>
+                  <CardDescription>Selecione o portal cadastrado; os requisitos comuns valem para todos os poderes.</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-5">
+                  <div className="space-y-1.5">
+                    <Label>Portal da transparência</Label>
+                    <Select value={portalId} onValueChange={(v) => v && setPortalId(v)} items={portalItems}>
+                      <SelectTrigger className="w-full">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {portais.map((p) => (
+                          <SelectItem key={p.id} value={String(p.id)}>
+                            <span className="flex items-center gap-2">
+                              {p.nome}
+                              <AmbienteBadge ambiente={p.ambiente} />
+                            </span>
+                          </SelectItem>
+                        ))}
+                        <SelectItem value={AVULSO}>URL avulsa (não cadastrada)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    {portais.length === 0 && (
+                      <p className="text-xs text-muted-foreground">
+                        Nenhum portal cadastrado: cadastre em Configurações › Portais (Ctrl+,), ou informe uma URL avulsa.
+                      </p>
+                    )}
+                  </div>
 
-      {view && live && (
-        <ResultView
-          result={view.result}
-          onChange={setResult}
-          pending={view.pending}
-          progress={view.progress}
-          onCancel={live.status === 'running' ? cancel : undefined}
-        />
-      )}
-      {!live && result && <ResultView result={result} onChange={setResult} />}
+                  {portal ? (
+                    <div className="space-y-1 rounded-lg border bg-muted/40 px-3 py-2 text-sm">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <AmbienteBadge ambiente={portal.ambiente} />
+                        <span>
+                          <span className="text-muted-foreground">Poder:</span> {poderLabel}
+                        </span>
+                      </div>
+                      <a href={portal.url} target="_blank" rel="noreferrer" className="block break-all text-primary hover:underline">
+                        {portal.url}
+                      </a>
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      <div className="space-y-1.5">
+                        <Label htmlFor="url">URL do portal da transparência</Label>
+                        <Input
+                          id="url"
+                          type="url"
+                          required
+                          value={url}
+                          onChange={(e) => setUrl(e.target.value)}
+                          placeholder="https://transparencia.exemplo.gov.br/"
+                        />
+                        <p className="text-xs text-muted-foreground">
+                          Raiz do portal (<code>[Portal da Transparencia]</code> na documentação); o caminho de cada seção é acrescentado a ela.
+                        </p>
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label>Poder / esfera</Label>
+                        <Select
+                          value={avulsoPoder}
+                          onValueChange={(v) => v && setAvulsoPoder(v as PoderId)}
+                          items={poderes.map((p) => ({ value: p.id, label: p.label }))}
+                        >
+                          <SelectTrigger className="w-full">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {poderes.map((p) => (
+                              <SelectItem key={p.id} value={p.id}>
+                                {p.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="space-y-2">
+                    <Label>O que avaliar</Label>
+                    <RadioGroup value={mode} onValueChange={(v) => setMode(v as Mode)} className="grid gap-2">
+                      <label className="flex cursor-pointer items-center gap-2 text-sm">
+                        <RadioGroupItem value="todos" />
+                        Todos os itens (comuns + {poderLabel})
+                      </label>
+                      <label className="flex cursor-pointer items-center gap-2 text-sm">
+                        <RadioGroupItem value="selecionar" />
+                        Selecionar itens
+                      </label>
+                    </RadioGroup>
+                  </div>
+
+                  {mode === 'selecionar' && <ItemSelector pages={pages} selected={selected} onChange={setSelected} />}
+
+                  <div className="space-y-2 rounded-lg border p-3">
+                    <div className="flex items-center gap-2 text-sm font-medium">
+                      Extras desta avaliação
+                      <Badge variant="secondary">não altera as configurações</Badge>
+                    </div>
+                    <div className="flex items-center gap-2 text-sm">
+                      <Label htmlFor="maxPages" className="font-normal">
+                        Máx. de páginas seguidas por serigyLink
+                      </Label>
+                      <Input
+                        id="maxPages"
+                        type="number"
+                        min={1}
+                        max={200}
+                        value={maxPages}
+                        onChange={(e) => {
+                          const n = Number(e.target.value);
+                          setMaxPagesOverride(Number.isFinite(n) && n >= 1 ? n : null);
+                        }}
+                        className="w-20 shrink-0"
+                      />
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      Começa com o valor das configurações ({settingMaxPages}). Navegador e grafia da documentação também ficam em Configurações ›
+                      Comportamento.
+                    </p>
+                  </div>
+                </CardContent>
+                <div className="px-4 pb-4">
+                  <Button type="submit" disabled={!canRun}>
+                    <Play />
+                    {loading ? 'Avaliando…' : 'Avaliar'}
+                  </Button>
+                </div>
+              </Card>
+            </form>
+          )}
+        </aside>
+
+        {/* Coluna direita: resultado (estatísticas fixas no topo) */}
+        <section className="min-w-0 space-y-4">
+          {error && (
+            <Alert variant="destructive">
+              <CircleAlert />
+              <AlertTitle>Não foi possível concluir a operação</AlertTitle>
+              <AlertDescription>{error}</AlertDescription>
+            </Alert>
+          )}
+
+          {opened ? (
+            <ResultView
+              key={opened.resumo.id}
+              result={opened.resultado}
+              onChange={() => undefined}
+              readOnly
+              banner={
+                <div className="flex flex-wrap items-center gap-2 rounded-lg border border-l-4 border-l-blue-400 bg-blue-50/80 px-4 py-2.5 text-sm">
+                  <History className="size-4 text-blue-600" />
+                  <span className="font-medium">Avaliação do histórico</span>
+                  <span className="text-muted-foreground">avaliada em {formatDateTime(opened.resumo.avaliadaEm)}</span>
+                  {opened.resumo.origem === 'importada' && <Badge variant="secondary">Importada</Badge>}
+                  <span className="text-xs text-muted-foreground">somente leitura — para reavaliar, faça uma nova avaliação</span>
+                  <Button type="button" size="xs" variant="outline" className="ml-auto bg-white" onClick={() => setOpened(null)}>
+                    <ArrowLeft />
+                    Fechar
+                  </Button>
+                </div>
+              }
+            />
+          ) : view && live ? (
+            <ResultView
+              result={view.result}
+              onChange={setResult}
+              pending={view.pending}
+              progress={view.progress}
+              onCancel={live.status === 'running' ? cancel : undefined}
+            />
+          ) : result ? (
+            <ResultView result={result} onChange={setResult} actions={saveButton} />
+          ) : (
+            <div className="rounded-xl border border-dashed p-10 text-center text-sm text-muted-foreground">
+              O resultado da avaliação aparece aqui. Escolha o portal e clique em “Avaliar”, ou abra uma avaliação do histórico.
+            </div>
+          )}
+        </section>
+      </div>
+
+      <SettingsPanel
+        open={showSettings}
+        onClose={() => setShowSettings(false)}
+        settings={settings}
+        onSettingsChange={setSettings}
+        portais={portais}
+        poderes={poderes}
+        onPortaisChanged={(id) => void loadPortais(id)}
+        historyCount={historico.length}
+        onHistoryCleared={() => {
+          setOpened(null);
+          void loadHistorico();
+        }}
+      />
     </main>
   );
 }
