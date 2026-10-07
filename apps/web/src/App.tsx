@@ -511,6 +511,7 @@ export function App() {
               pending={view.pending}
               progress={view.progress}
               onCancel={live.status === 'running' ? cancel : undefined}
+              invokerWait={live.invoker ? undefined : live.status === 'running' ? 'running' : 'skipped'}
             />
           ) : result ? (
             <ResultView result={result} onChange={setResult} actions={saveButton} />

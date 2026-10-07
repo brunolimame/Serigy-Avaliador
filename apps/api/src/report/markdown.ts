@@ -107,7 +107,7 @@ export function renderMarkdown(r: EvaluationResult): string {
     `- **Escopo:** ${r.scope.mode === 'todos' ? 'todos os itens' : 'parcial'} — ${r.scope.items} itens em ${r.scope.pages} páginas da matriz`,
   );
   out.push(`- **Páginas analisadas:** ${r.fetched.length}`);
-  out.push(`- **Invoker:** ${r.invoker.found ? '✅' : '❌'} ${r.invoker.message}`, '');
+  out.push(`- **Invoker:** ${r.invoker.found ? '✅' : '❌'} ${r.invoker.message}${r.invoker.value ? ` — chave: ${code(r.invoker.value)}` : ''}`, '');
 
   out.push('## Resumo geral', '', ...summaryTable(r.summary), '');
   out.push(

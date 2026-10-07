@@ -373,9 +373,11 @@ interface Props {
   banner?: ReactNode;
   /** Botões extras no cabeçalho (ex.: salvar avaliação). */
   actions?: ReactNode;
+  /** Estado do Invoker durante a análise (ainda sem resultado): sendo verificado ou não analisado. */
+  invokerWait?: PendingState;
 }
 
-export function ResultView({ result, onChange, pending, progress, onCancel, readOnly, banner, actions }: Props) {
+export function ResultView({ result, onChange, pending, progress, onCancel, readOnly, banner, actions, invokerWait: invokerWaitProp }: Props) {
   const isLive = pending !== undefined;
   const running = onCancel !== undefined;
   const lastFetched = result.fetched.at(-1);
@@ -633,6 +635,34 @@ export function ResultView({ result, onChange, pending, progress, onCancel, read
       <div className="max-h-[80vh] min-h-[28rem] space-y-3 overflow-y-auto pr-1">
         {/* Invoker: primeiro item da análise (identificação na página principal) */}
         {(() => {
+          // Sem resultado ainda (análise em andamento) ou sendo reavaliado: mesmo tema "analisando" dos itens
+          const wait: PendingState | undefined = reevaluatingInvoker ? 'running' : invokerWaitProp;
+          if (wait) {
+            const p = PENDING_TONE[wait];
+            return (
+              <div aria-busy={wait === 'running'} className={cn('flex items-start gap-3 rounded-xl border p-3', p.row)}>
+                <PendingIcon wait={wait} />
+                <div className="min-w-0 flex-1 text-sm">
+                  <div className={cn('font-medium', wait === 'skipped' && 'text-muted-foreground')}>Invoker</div>
+                  <div className="text-xs text-muted-foreground">
+                    {wait === 'running' ? 'Verificando a página principal…' : 'Verificação interrompida'}
+                  </div>
+                </div>
+                <div className="flex shrink-0 flex-col items-end gap-1.5">
+                  <Badge className={cn('border-transparent', p.chip)}>
+                    {wait === 'running' && <Spinner />}
+                    {p.label}
+                  </Badge>
+                  {reevaluatingInvoker && (
+                    <Button type="button" size="xs" variant="outline" className="bg-white/80" disabled>
+                      <Spinner />
+                      Reavaliando…
+                    </Button>
+                  )}
+                </div>
+              </div>
+            );
+          }
           const t = TONE[result.invoker.found ? 'ok' : 'missing'];
           const Icon = t.icon;
           return (
@@ -641,6 +671,11 @@ export function ResultView({ result, onChange, pending, progress, onCancel, read
               <div className="min-w-0 flex-1 text-sm">
                 <div className="font-medium">Invoker</div>
                 <div className="text-xs text-muted-foreground">{result.invoker.message}</div>
+                {result.invoker.value && (
+                  <div className="break-all text-xs text-muted-foreground">
+                    Chave encontrada: <code className="rounded bg-muted px-1">{result.invoker.value}</code>
+                  </div>
+                )}
                 {invokerError && <p className="mt-1 text-xs text-destructive">{invokerError}</p>}
               </div>
               <div className="flex shrink-0 flex-col items-end gap-1.5">
