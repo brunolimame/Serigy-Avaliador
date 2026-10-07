@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowLeft, CircleAlert, CircleCheck, History, Play, Save, Settings } from 'lucide-react';
+import { ArrowLeft, CircleAlert, CircleCheck, History, Info, Play, Save, Settings } from 'lucide-react';
 import type {
   AvaliacaoDetalhe,
   AvaliacaoResumo,
@@ -33,6 +33,11 @@ type SaveState = 'idle' | 'saving' | 'saved' | 'duplicate' | 'error';
 
 /** Valor do seletor para uma URL que não está cadastrada. */
 const AVULSO = 'avulso';
+
+const SERIGY_URL = 'https://serigy.tce.se.gov.br/';
+const AUTOR = { nome: 'Bruno Lima', url: 'https://github.com/brunolimame' };
+
+const link = 'font-medium underline underline-offset-2 hover:no-underline';
 const STORAGE_KEY = 'avaliador.portalId';
 
 const remembered = (): string | null => {
@@ -254,7 +259,7 @@ export function App() {
   );
 
   return (
-    <main className="mx-auto flex max-w-[1700px] flex-col gap-4 p-4 sm:p-6 ">
+    <main className="mx-auto flex max-w-[1700px] flex-col gap-4 p-4 pb-14 sm:p-6 sm:pb-14">
       <header className="flex shrink-0 flex-wrap items-center gap-4 rounded-xl border-b-4 border-blue-400 bg-blue-950 px-6 py-3 text-white shadow-sm">
         <div className="min-w-0 flex-1">
           <p className="text-xs font-medium uppercase tracking-widest text-blue-200">PNTP 2026 · Serigy</p>
@@ -275,6 +280,23 @@ export function App() {
           Configurações
         </Button>
       </header>
+
+      <Alert className="shrink-0 border-amber-200 bg-amber-50/80 text-amber-950">
+        <Info className="text-amber-600" />
+        <AlertTitle>Ferramenta de apoio ao desenvolvimento</AlertTitle>
+        <AlertDescription className="text-amber-950/90">
+          Este avaliador ajuda a conferir o mapeamento da marcação do portal durante o desenvolvimento, antes da validação oficial. Ele{' '}
+          <strong>não substitui</strong> a validação realizada pelo Serigy: o resultado que vale é o do{' '}
+          <a href={SERIGY_URL} target="_blank" rel="noreferrer" className={link}>
+            Serigy do TCE-SE
+          </a>
+          . Desenvolvido por{' '}
+          <a href={AUTOR.url} target="_blank" rel="noreferrer" className={link}>
+            {AUTOR.nome}
+          </a>
+          .
+        </AlertDescription>
+      </Alert>
 
       <div className="grid items-start gap-6 lg:grid-cols-[26rem_minmax(0,1fr)]">
         {/* Coluna esquerda: nova avaliação / histórico */}
@@ -539,6 +561,17 @@ export function App() {
           void loadHistorico();
         }}
       />
+
+      <footer className="fixed inset-x-0 bottom-0 z-40 border-t bg-background/95 px-4 py-2 text-center text-xs text-muted-foreground backdrop-blur">
+        Ferramenta de apoio ao desenvolvimento — não substitui a validação do{' '}
+        <a href={SERIGY_URL} target="_blank" rel="noreferrer" className="text-primary underline-offset-2 hover:underline">
+          Serigy
+        </a>{' '}
+        · Desenvolvido por{' '}
+        <a href={AUTOR.url} target="_blank" rel="noreferrer" className="text-primary underline-offset-2 hover:underline">
+          {AUTOR.nome}
+        </a>
+      </footer>
     </main>
   );
 }
