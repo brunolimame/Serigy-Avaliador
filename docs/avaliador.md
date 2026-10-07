@@ -283,12 +283,20 @@ Status de cada item:
   `items: [todos os ids do grupo]` (cada página é baixada uma vez). A UI mescla os itens de todas as pastas do grupo e
   recalcula os resumos (`mergeReevaluatedMany`). Durante a reavaliação o botão mostra "Reavaliando N itens…" e os
   demais botões de reavaliar ficam desabilitados; um erro aparece abaixo do cabeçalho do grupo.
-- **Ícone do nível de atendimento do grupo**: o cabeçalho do grupo traz o mesmo tipo de ícone dos itens, conforme o
-  percentual: `CircleCheck` verde (100%), `TriangleAlert` amarelo (40% a menos de 100%) e `CircleX` vermelho (abaixo de
-  40%); durante a análise aparece o spinner (em andamento) ou o relógio (aguardando).
-
-### Limitações conhecidas
-
+- **Estado durante a reavaliação** (botão "Reavaliar" do item ou do grupo): o item reavaliado — ou **todos** os itens do
+  grupo — passa a aparecer como "analisando" (tema azul, ícone de loader e selo "Analisando…"), em vez de ficar com a cor e
+  o ícone do último resultado; ao terminar, volta a mostrar o novo resultado. No grupo, o ícone do cabeçalho vira loader, a
+  faixa lateral fica azul e o texto passa a "Reavaliando N itens…"; o selo de percentual da seção some até concluir. O
+  botão que foi clicado mantém a animação ("Reavaliando…"); os demais ficam desabilitados. A regra é `displayWait` em
+  `apps/web/src/status-icons.ts`.
+- **Ícone do estado atual (itens e grupos)** — `apps/web/src/status-icons.ts`, visível durante e depois da análise:
+  - **item sem resultado**: com a análise em execução mostra o **loader** (azul = sendo analisado agora; cinza = na
+    fila); se a análise é interrompida, "não analisado". Ao concluir, passa ao ícone do resultado (atendido, atenção,
+    serigyEmpty declarado, não encontrado);
+  - **grupo**: sem nenhum item concluído mostra o loader; assim que há itens concluídos mostra o ícone do nível de
+    atendimento **parcial** (`CircleCheck` verde = 100%, `TriangleAlert` amarelo = 40% a menos de 100%, `CircleX`
+    vermelho = abaixo de 40%), com um loader ao lado enquanto ainda houver itens na fila/em análise; sem nada em
+    andamento, só o ícone do nível (ou "não analisado", se interrompida antes de qualquer item concluir).
 - **Navegador x HTTP**: com `renderer: "browser"` (padrão) o JavaScript é executado e os `serigyExecuteWaitSection` são
   clicados. Com `renderer: "http"` o HTML é baixado sem executar JavaScript, e o relatório avisa quando há conteúdo
   que dependia de clique. Conteúdo que exige login, CAPTCHA ou interação além do `serigyExecuteWaitSection` não é visto.

@@ -4,6 +4,7 @@ import {
   CircleAlert,
   CircleCheck,
   CircleMinus,
+  CircleSlash,
   CircleX,
   Clock,
   Download,
@@ -19,6 +20,7 @@ import type { EvaluationResult, ItemResult, ItemStatus, PageResult, SectionResul
 import { groupPagesByNumber, summarize } from '@serigy/shared';
 import { api, download } from '../api';
 import { SCORE_STYLE, scoreTone, type ScoreTone } from '../score';
+import { displayWait, groupIconState, pendingIconKind } from '../status-icons';
 import { AMBIENTE_TONE } from './AmbienteBadge';
 import type { PendingState } from '../live';
 import { mergeReevaluated, mergeReevaluatedMany } from '../merge';
@@ -69,8 +71,29 @@ const PENDING_TONE: Record<PendingState, { label: string; row: string; chip: str
   skipped: { label: 'Não analisado', row: 'border-slate-200 bg-slate-50/70 dark:bg-slate-900/30', chip: 'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400' },
 };
 
-function Spinner({ className }: { className?: string }) {
-  return <Loader2 aria-hidden className={cn('size-3.5 animate-spin', className)} />;
+function Spinner({ className, label }: { className?: string; label?: string }) {
+  return label ? (
+    <Loader2 role="img" aria-label={label} className={cn('size-3.5 animate-spin', className)} />
+  ) : (
+    <Loader2 aria-hidden className={cn('size-3.5 animate-spin', className)} />
+  );
+}
+
+/**
+ * Ícone do estado atual de um item sem resultado. Com a análise em execução, todo item que ainda não terminou
+ * mostra o loader (azul = sendo analisado agora; cinza = na fila). "Não analisado" só aparece se a análise for
+ * interrompida.
+ */
+function PendingIcon({ wait }: { wait: PendingState }) {
+  if (pendingIconKind(wait) === 'skipped') {
+    return <CircleSlash aria-label="Não analisado" role="img" className="mt-0.5 size-5 shrink-0 text-slate-400" />;
+  }
+  return (
+    <Spinner
+      label={wait === 'running' ? 'Analisando' : 'Aguardando na fila'}
+      className={cn('mt-0.5 size-5 shrink-0', wait === 'running' ? 'text-blue-600' : 'text-slate-400')}
+    />
+  );
 }
 
 function Stat({ label, value, icon: Icon, color }: { label: string; value: string | number; icon: LucideIcon; color: string }) {
@@ -138,8 +161,8 @@ function ScoreBadge({ summary }: { summary: Summary }) {
 }
 
 /** Percentual da seção; só aparece quando todos os itens dela já têm resultado. */
-function SectionScore({ items, pending }: { items: ItemResult[]; pending?: Map<string, PendingState> }) {
-  const finished = items.filter((i) => !pending?.has(i.id));
+function SectionScore({ items, pending, busy }: { items: ItemResult[]; pending?: Map<string, PendingState>; busy?: Set<string> }) {
+  const finished = items.filter((i) => !pending?.has(i.id) && !busy?.has(i.id));
   if (items.length === 0 || finished.length < items.length) return null;
   return <ScoreBadge summary={summarize(finished)} />;
 }
@@ -266,6 +289,8 @@ export function ResultView({ result, onChange, pending, progress, onCancel }: Pr
   const [reevaluating, setReevaluating] = useState<string | null>(null);
   // Número do grupo cujos itens estão sendo todos reavaliados
   const [reevaluatingGroup, setReevaluatingGroup] = useState<string | null>(null);
+  // Itens que estão sendo reavaliados agora (um, ou todos os do grupo): aparecem como "analisando"
+  const [busyIds, setBusyIds] = useState<Set<string>>(new Set());
   const [groupErrors, setGroupErrors] = useState<Record<string, string>>({});
   const [itemErrors, setItemErrors] = useState<Record<string, string>>({});
   // Tudo começa FECHADO; só as páginas em análise abrem sozinhas (e fecham ao terminar). O usuário manda depois.
@@ -290,6 +315,7 @@ export function ResultView({ result, onChange, pending, progress, onCancel }: Pr
   /** Executa de novo a avaliação só deste item (com os mesmos parâmetros) e atualiza o resultado. */
   async function reevaluate(itemId: string) {
     setReevaluating(itemId);
+    setBusyIds(new Set([itemId]));
     setItemErrors(({ [itemId]: _drop, ...rest }) => rest);
     try {
       const fresh = await api.evaluate({
@@ -305,6 +331,7 @@ export function ResultView({ result, onChange, pending, progress, onCancel }: Pr
       setItemErrors((prev) => ({ ...prev, [itemId]: err instanceof Error ? err.message : String(err) }));
     } finally {
       setReevaluating(null);
+      setBusyIds(new Set());
     }
   }
 
@@ -314,6 +341,7 @@ export function ResultView({ result, onChange, pending, progress, onCancel }: Pr
    */
   async function reevaluateGroup(groupNumber: string, itemIds: string[]) {
     setReevaluatingGroup(groupNumber);
+    setBusyIds(new Set(itemIds));
     setGroupErrors(({ [groupNumber]: _drop, ...rest }) => rest);
     try {
       const fresh = await api.evaluate({
@@ -329,6 +357,7 @@ export function ResultView({ result, onChange, pending, progress, onCancel }: Pr
       setGroupErrors((prev) => ({ ...prev, [groupNumber]: err instanceof Error ? err.message : String(err) }));
     } finally {
       setReevaluatingGroup(null);
+      setBusyIds(new Set());
     }
   }
 
@@ -473,37 +502,45 @@ export function ResultView({ result, onChange, pending, progress, onCancel }: Pr
           const hasRunning = allItems.some((i) => pending?.get(i.id) === 'running');
           const isOpen = openPages[group.number] ?? hasRunning;
           const noSchema = group.pages.filter((p) => !p.schemaFound);
+          const groupBusy = reevaluatingGroup === group.number; // todos os itens do grupo sendo reavaliados
 
           return (
             <Collapsible
               key={group.number}
               open={isOpen}
               onOpenChange={(o) => setOpenPages((prev) => ({ ...prev, [group.number]: o }))}
-              className={cn('overflow-hidden rounded-xl border border-l-4 bg-card shadow-sm', pageTone(summary, pendingCount))}
+              className={cn('overflow-hidden rounded-xl border border-l-4 bg-card shadow-sm', pageTone(summary, pendingCount + (groupBusy ? 1 : 0)))}
             >
               <div className="flex items-center hover:bg-muted/60">
               <CollapsibleTrigger className="flex min-w-0 flex-1 flex-wrap items-center gap-2 p-3.5 text-left font-medium">
                 <ChevronRight className={cn('size-4 shrink-0 text-muted-foreground transition-transform', isOpen && 'rotate-90')} />
-                {/* Ícone do nível de atendimento do grupo: em análise (spinner/relógio) ou verde, amarelo, vermelho */}
-                {pendingCount > 0 ? (
-                  hasRunning ? (
-                    <Spinner className="size-5 shrink-0 text-primary" />
-                  ) : (
-                    <Clock aria-hidden className="size-5 shrink-0 text-muted-foreground" />
-                  )
-                ) : (
-                  (() => {
-                    const level = SCORE_ICON[scoreTone(summary.score)];
-                    const LevelIcon = level.icon;
-                    return (
+                {/* Ícone do estado atual do grupo. Com a análise em execução e itens ainda sem resultado, mostra o loader
+                    (sozinho até o 1º item terminar; depois ao lado do ícone de atendimento parcial). Sem nada em andamento:
+                    o ícone do nível de atendimento (verde, amarelo, vermelho). */}
+                {(() => {
+                  if (groupBusy) return <Spinner label="Reavaliando" className="size-5 shrink-0 text-primary" />;
+                  const active = allItems.some((i) => {
+                    const state = pending?.get(i.id);
+                    return state === 'running' || state === 'waiting';
+                  });
+                  const state = groupIconState({ total: allItems.length, pending: pendingCount, active, score: summary.score });
+                  if (state.icon === 'loader') return <Spinner label="Analisando" className="size-5 shrink-0 text-primary" />;
+                  if (state.icon === 'skipped') {
+                    return <CircleSlash aria-label="Não analisado" role="img" className="size-5 shrink-0 text-muted-foreground" />;
+                  }
+                  const level = SCORE_ICON[state.tone];
+                  const LevelIcon = level.icon;
+                  return (
+                    <>
                       <LevelIcon
                         role="img"
-                        aria-label={`${level.label} (${summary.score}%)`}
+                        aria-label={`${level.label} (${summary.score}%${pendingCount > 0 ? ', parcial' : ''})`}
                         className={cn('size-5 shrink-0', level.className)}
                       />
-                    );
-                  })()
-                )}
+                      {state.loader && <Spinner label="Analisando" className="size-3.5 shrink-0 text-primary" />}
+                    </>
+                  );
+                })()}
                 {group.number}. {group.title}
                 {group.pages.map((p) => (
                   <code key={p.id} className="text-xs font-normal text-muted-foreground">
@@ -511,7 +548,9 @@ export function ResultView({ result, onChange, pending, progress, onCancel }: Pr
                   </code>
                 ))}
                 <span className="ml-auto text-sm font-normal text-muted-foreground">
-                  {pendingCount > 0 ? (
+                  {groupBusy ? (
+                    `Reavaliando ${allItems.length} itens…`
+                  ) : pendingCount > 0 ? (
                     `${allItems.length - pendingCount}/${allItems.length} concluídos`
                   ) : (
                     <ScoreBadge summary={summary} />
@@ -557,7 +596,7 @@ export function ResultView({ result, onChange, pending, progress, onCancel }: Pr
                       <div>
                         <h3 className="flex flex-wrap items-center gap-2 text-sm font-semibold">
                           {s.id}. {s.title}
-                          <SectionScore items={page.sections.find((x) => x.id === s.id)?.items ?? []} pending={pending} />
+                          <SectionScore items={page.sections.find((x) => x.id === s.id)?.items ?? []} pending={pending} busy={busyIds} />
                         </h3>
                         {s.notes.map((n) => (
                           <p key={n} className="text-xs text-muted-foreground">
@@ -567,12 +606,14 @@ export function ResultView({ result, onChange, pending, progress, onCancel }: Pr
                       </div>
                       <div className="space-y-2">
                         {s.items.map((i) => {
-                          const wait = pending?.get(i.id);
+                          const busy = busyIds.has(i.id);
+                          const wait = displayWait(pending?.get(i.id), busy);
                           if (wait) {
                             // Ainda sem resultado: mostra que está na fila / sendo analisado.
                             const t = PENDING_TONE[wait];
                             return (
                               <div key={i.id} aria-busy={wait === 'running'} className={cn('flex items-start gap-3 rounded-xl border p-3', t.row)}>
+                                <PendingIcon wait={wait} />
                                 <span className="w-14 shrink-0 text-sm text-muted-foreground">{i.id}</span>
                                 <div className={cn('min-w-0 flex-1 text-sm', wait === 'skipped' && 'text-muted-foreground')}>
                                   {i.descricao}
@@ -580,10 +621,18 @@ export function ResultView({ result, onChange, pending, progress, onCancel }: Pr
                                     <code>{i.atributo}</code>
                                   </div>
                                 </div>
-                                <Badge className={cn('border-transparent', t.chip)}>
-                                  {wait === 'running' && <Spinner />}
-                                  {t.label}
-                                </Badge>
+                                <div className="flex shrink-0 flex-col items-end gap-1.5">
+                                  <Badge className={cn('border-transparent', t.chip)}>
+                                    {wait === 'running' && <Spinner />}
+                                    {t.label}
+                                  </Badge>
+                                  {busy && (
+                                    <Button type="button" size="xs" variant="outline" className="bg-white/80" disabled>
+                                      {reevaluating === i.id ? <Spinner /> : <RefreshCw />}
+                                      {reevaluating === i.id ? 'Reavaliando…' : 'Reavaliar'}
+                                    </Button>
+                                  )}
+                                </div>
                               </div>
                             );
                           }
