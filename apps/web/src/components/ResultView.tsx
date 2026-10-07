@@ -302,7 +302,7 @@ function ItemDetails({ item, page, section }: { item: ItemResult; page: PageResu
       {item.serigyEmpty && item.serigyEmpty.length > 0 && (
         <div>
           <strong>serigyEmpty ({item.serigyEmpty.length} ocorrência(s)):</strong>
-          <ul className="mt-1 list-disc space-y-1 pl-5">
+          <ul className="mt-1 max-h-40 list-disc space-y-1 overflow-y-auto pl-5 pr-1">
             {item.serigyEmpty.map((c, n) => (
               <li key={`${c.pageUrl}-${n}`} className="break-words">
                 {c.valido ? (

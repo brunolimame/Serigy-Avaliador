@@ -97,10 +97,10 @@ function delegationsFor(ctx: Context, scope: SectionScope, schemaKey: string, at
   return found;
 }
 
-/** Avalia um item; quando não atendido, anexa os exemplos da documentação. */
+/** Avalia um item e anexa os exemplos da documentação (em qualquer situação, inclusive atendido). */
 function evaluateItem(item: CatalogItem, sectionId: string, page: CatalogPage, scope: SectionScope, ctx: Context): ItemResult {
   const result = evaluateCore(item, sectionId, page, scope, ctx);
-  if ((result.status === 'missing' || result.status === 'warning') && item.examples?.length) {
+  if (item.examples?.length) {
     result.examples = item.examples;
   }
   return result;

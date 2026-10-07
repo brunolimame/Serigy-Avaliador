@@ -324,7 +324,7 @@ Status de cada item:
   não são seguidos. A mensagem lista os formatos declarados em `serigyValue`.
 - **Itens não atendidos** (`missing`/`warning`) trazem `expected` (marcação esperada: schema, `serigyItem` e dica
   do tipo de valor), `evidence` (o que foi encontrado) e `examples` (blocos HTML da documentação que usam o
-  `serigyItem`, extraídos por `parse-docs.ts`). A UI mostra tudo num painel sob o item e o relatório, na seção
+  `serigyItem`, extraídos por `parse-docs.ts`; também anexados aos itens atendidos). A UI mostra tudo num painel sob o item e o relatório, na seção
   "Detalhes das pendências".
 - **Reavaliar**: o botão em cada item chama `POST /api/evaluate` com `items: [id]` e os mesmos parâmetros de
   rastreio (`result.crawl`); a UI troca só aquele item e recalcula os resumos (`apps/web/src/merge.ts`).

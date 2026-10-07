@@ -138,10 +138,11 @@ describe('serigyLink', () => {
 });
 
 describe('detalhes de itens não atendidos', () => {
-  it('traz o esperado e os exemplos da documentação; itens ok não trazem exemplos', async () => {
+  it('traz o esperado e os exemplos da documentação, inclusive nos itens atendidos', async () => {
     const loader = new FakeLoader({ [P]: '<html/>', [D]: `<div serigySchema="${SCHEMA}"><b serigyItem="valorEmpenhado">1,00</b></div>` });
     const r = await run(loader, { items: ['4.1.1', '4.1.2'] });
-    expect(find(r, '4.1.1').examples).toBeUndefined();
+    expect(find(r, '4.1.1').status).toBe('ok');
+    expect(find(r, '4.1.1').examples?.length).toBeGreaterThan(0);
     const miss = find(r, '4.1.2');
     expect(miss.expected).toContain('serigyItem="valorLiquidado"');
     expect(miss.expected).toContain('monetário');
