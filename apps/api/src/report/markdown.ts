@@ -1,4 +1,4 @@
-import { AMBIENTES, compareIds, groupPagesByNumber, summarize, type EvaluationResult, type FetchOrigin, type ItemResult, type ItemStatus, type Summary } from '@serigy/shared';
+import { AMBIENTES, compareIds, groupPagesByNumber, MAX_EVIDENCE, splitMessage, summarize, type EvaluationResult, type FetchOrigin, type ItemResult, type ItemStatus, type PageResult, type SectionResult, type Summary } from '@serigy/shared';
 
 const ICON: Record<ItemStatus, string> = { ok: '✅', warning: '⚠️', empty: '➖', missing: '❌' };
 const LABEL: Record<ItemStatus, string> = {
@@ -54,6 +54,47 @@ function summaryTable(s: Summary): string[] {
 
 const fmtDate = (iso: string): string => new Date(iso).toLocaleString('pt-BR', { timeZone: 'America/Maceio' });
 
+/** Bloco de detalhes de um item (situação em lista, serigyEmpty e ocorrências); serve para pendências e atendidos. */
+function itemDetail(out: string[], p: PageResult, s: SectionResult, i: ItemResult): void {
+  out.push(`#### ${i.id} — ${i.descricao}`, '');
+  // vários motivos viram lista; o que a lista de serigyEmpty já detalha não se repete na situação
+  const parts = splitMessage(i.message).filter((m) => !(i.serigyEmpty?.length && m.startsWith('serigyEmpty declarado')));
+  out.push(`- **Situação:** ${ICON[i.status]} ${LABEL[i.status]}${parts.length === 1 ? ` — ${parts[0]}` : ''}`);
+  if (parts.length > 1) for (const m of parts) out.push(`  - ${m}`);
+  out.push(`- **Página/seção:** ${p.number}. ${p.title} (${p.id}) › ${s.id}. ${s.title}`);
+  out.push(`- **Critério(s):** ${i.criterios.join(', ') || '—'}`);
+  if (s.caminhoUrl) out.push(`- **Caminho sugerido:** ${code(s.caminhoUrl)}`);
+  out.push(`- **Esperado:** ${i.expected}`);
+  if (i.serigyEmpty?.length) {
+    out.push(`- **serigyEmpty (${i.serigyEmpty.length} ocorrência(s)):**`);
+    for (const c of i.serigyEmpty) {
+      out.push(
+        `  - ${c.valido ? `declarado — motivo ${code(c.motivo)} (atende parcialmente)` : c.motivo ? `motivo ${code(c.motivo)} inválido — ${c.problema}` : 'declarado mas motivo não informado'} em ${c.pageUrl}`,
+      );
+    }
+  }
+  out.push(
+    `- **Schema:** ${i.schema.confere ? '✅ confere' : '❌ não confere'} — esperado ${code(i.schema.esperado)}; encontrado ${i.schema.encontrado ? code(i.schema.encontrado) : 'nenhum'}`,
+  );
+  const urls = urlLinks(i.analyzedUrls).split('<br>');
+  if (urls.length > 1) {
+    out.push('- **URL analisada:**');
+    for (const u of urls) out.push(`  - ${u}`);
+  } else out.push(`- **URL analisada:** ${urls.join('')}`);
+  for (const v of i.loadedVia ?? []) {
+    out.push(`- **${v.kind === 'iframe' ? 'Carregado via iframe' : `Via serigyLink${v.tag ? ` (${code(`<${v.tag}>`)})` : ''}`}:** serigyLink avaliado ${v.url}`);
+  }
+  out.push(`- **Documentação:** ${p.docUrl}`);
+  if (i.evidence.length) {
+    out.push(`- **Encontrado (${i.evidence.length} ocorrência(s)${i.evidence.length >= MAX_EVIDENCE ? `, exibindo as primeiras ${MAX_EVIDENCE}` : ''}):**`);
+    for (const e of i.evidence) out.push(`  - ${code(e.snippet)} em ${e.pageUrl}`);
+  }
+  for (const ex of i.examples ?? []) {
+    out.push('', `Exemplo da documentação — ${ex.title}:`, '', '```html', ex.html, '```');
+  }
+  out.push('');
+}
+
 /** Gera o relatório de uma avaliação em Markdown. */
 export function renderMarkdown(r: EvaluationResult): string {
   const out: string[] = [];
@@ -108,35 +149,16 @@ export function renderMarkdown(r: EvaluationResult): string {
     out.push('');
 
     out.push('### Detalhes das pendências', '');
-    for (const { p, s, i } of pending) {
-      out.push(`#### ${i.id} — ${i.descricao}`, '');
-      out.push(`- **Situação:** ${ICON[i.status]} ${LABEL[i.status]} — ${i.message}`);
-      out.push(`- **Página/seção:** ${p.number}. ${p.title} (${p.id}) › ${s.id}. ${s.title}`);
-      out.push(`- **Critério(s):** ${i.criterios.join(', ') || '—'}`);
-      if (s.caminhoUrl) out.push(`- **Caminho sugerido:** ${code(s.caminhoUrl)}`);
-      out.push(`- **Esperado:** ${i.expected}`);
-      for (const c of i.serigyEmpty ?? []) {
-        out.push(
-          `- **serigyEmpty:** ${c.valido ? `declarado — motivo ${code(c.motivo)} (atende parcialmente)` : c.motivo ? `motivo ${code(c.motivo)} inválido — ${c.problema}` : 'declarado mas motivo não informado'}`,
-        );
-      }
-      out.push(
-        `- **Schema:** ${i.schema.confere ? '✅ confere' : '❌ não confere'} — esperado ${code(i.schema.esperado)}; encontrado ${i.schema.encontrado ? code(i.schema.encontrado) : 'nenhum'}`,
-      );
-      out.push(`- **URL analisada:** ${urlLinks(i.analyzedUrls).split('<br>').join(', ')}`);
-      for (const v of i.loadedVia ?? []) {
-        out.push(`- **${v.kind === 'iframe' ? 'Carregado via iframe' : `Via serigyLink${v.tag ? ` (${code(`<${v.tag}>`)})` : ''}`}:** serigyLink avaliado ${v.url}`);
-      }
-      out.push(`- **Documentação:** ${p.docUrl}`);
-      if (i.evidence.length) {
-        out.push('- **Encontrado:**');
-        for (const e of i.evidence) out.push(`  - ${code(e.snippet)} em ${e.pageUrl}`);
-      }
-      for (const ex of i.examples ?? []) {
-        out.push('', `Exemplo da documentação — ${ex.title}:`, '', '```html', ex.html, '```');
-      }
-      out.push('');
-    }
+    for (const { p, s, i } of pending) itemDetail(out, p, s, i);
+  }
+
+  // Itens atendidos (atendidos e serigyEmpty declarado): mesmos detalhes, em lista
+  const met = r.pages
+    .flatMap((p) => p.sections.flatMap((s) => s.items.filter((i) => i.status === 'ok' || i.status === 'empty').map((i) => ({ p, s, i }))))
+    .sort((a, b) => compareIds(a.i.id, b.i.id));
+  if (met.length) {
+    out.push('## Detalhes dos itens atendidos', '');
+    for (const { p, s, i } of met) itemDetail(out, p, s, i);
   }
 
   out.push('## Detalhamento', '');

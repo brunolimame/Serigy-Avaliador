@@ -140,8 +140,12 @@ describe('apresentação', () => {
     const ok = renderMarkdown(await run(empty('valorEmpenhado', 'ainda não definido')));
     expect(ok).toContain('serigyEmpty declarado');
     expect(ok).not.toContain('Vazio declarado');
+    // itens atendidos (inclui serigyEmpty declarado) também têm os detalhes em lista
+    expect(ok).toContain('## Detalhes dos itens atendidos');
+    expect(ok).toContain('**serigyEmpty (1 ocorrência(s)):**');
 
     const bad = renderMarkdown(await run(empty('valorEmpenhado', '')));
-    expect(bad).toContain('**serigyEmpty:** declarado mas motivo não informado');
+    expect(bad).toContain('**serigyEmpty (1 ocorrência(s)):**');
+    expect(bad).toContain('  - declarado mas motivo não informado em ');
   });
 });

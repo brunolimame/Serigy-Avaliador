@@ -540,3 +540,29 @@ export interface AvaliacaoEnvelope {
   hash: string;
   resultado: EvaluationResult;
 }
+
+/**
+ * Divide a mensagem de um item nas suas partes. A avaliação junta os motivos com "; ", mas um ";" dentro de aspas
+ * (ex.: o motivo de um serigyEmpty) não separa nada.
+ */
+export function splitMessage(text: string): string[] {
+  const parts: string[] = [];
+  let current = '';
+  let inQuotes = false;
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i]!;
+    if (ch === '"') inQuotes = !inQuotes;
+    if (!inQuotes && ch === ';' && text[i + 1] === ' ') {
+      parts.push(current.trim());
+      current = '';
+      i++; // o espaço depois do ";"
+      continue;
+    }
+    current += ch;
+  }
+  parts.push(current.trim());
+  return parts.filter(Boolean);
+}
+
+/** Máximo de ocorrências (trecho + página) guardadas como evidência de cada item. */
+export const MAX_EVIDENCE = 200;

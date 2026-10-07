@@ -1,4 +1,4 @@
-import { PODERES, summarize, type EvaluationResult } from '@serigy/shared';
+import { MAX_EVIDENCE, PODERES, summarize, type EvaluationResult } from '@serigy/shared';
 import { z } from 'zod';
 
 /**
@@ -50,7 +50,7 @@ const itemSchema = z.strictObject({
     .array(z.strictObject({ motivo: text(500), valido: z.boolean(), problema: text(500).optional(), pageUrl: httpUrl }))
     .max(200)
     .optional(),
-  evidence: z.array(z.strictObject({ pageUrl: httpUrl, snippet: text(1000) })).max(10),
+  evidence: z.array(z.strictObject({ pageUrl: httpUrl, snippet: text(1000) })).max(MAX_EVIDENCE),
 });
 
 const sectionSchema = z.strictObject({

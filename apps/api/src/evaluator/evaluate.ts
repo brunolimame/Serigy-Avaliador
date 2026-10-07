@@ -12,7 +12,7 @@ import type {
   SectionResult,
   StreamEvent,
 } from '@serigy/shared';
-import { DEFAULT_MAX_PAGES, summarize } from '@serigy/shared';
+import { DEFAULT_MAX_PAGES, MAX_EVIDENCE, summarize } from '@serigy/shared';
 import { getPoder, loadCatalog, pagesForPoder } from '../catalog/load';
 import { describeExpected, validateType } from './checks';
 import { PageStore, urlKey } from './collector';
@@ -118,7 +118,7 @@ function evaluateCore(item: CatalogItem, sectionId: string, page: CatalogPage, s
     tipos: item.tipos,
     expected: describeExpected(item, page.schemaUrl),
   };
-  const evidence = (list: MarkupElement[]) => list.slice(0, 3).map((e) => ({ pageUrl: e.pageUrl, snippet: e.snippet }));
+  const evidence = (list: MarkupElement[]) => list.slice(0, MAX_EVIDENCE).map((e) => ({ pageUrl: e.pageUrl, snippet: e.snippet }));
 
   // serigyLink: <iframe> ou elemento sem serigyItem -> o schema inteiro é buscado no destino;
   // elemento com serigyItem -> só aquele item é buscado no destino (docs/pntp-2026/definicoes.md).

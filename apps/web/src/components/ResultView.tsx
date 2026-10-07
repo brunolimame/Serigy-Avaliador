@@ -17,13 +17,14 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import type { EvaluationResult, ItemResult, ItemStatus, PageResult, SectionResult, Summary } from '@serigy/shared';
-import { groupPagesByNumber, summarize } from '@serigy/shared';
+import { groupPagesByNumber, MAX_EVIDENCE, summarize } from '@serigy/shared';
 import { api, download } from '../api';
 import { SCORE_STYLE, scoreTone, type ScoreTone } from '../score';
 import { displayWait, groupIconState, pendingIconKind } from '../status-icons';
 import { AMBIENTE_TONE } from './AmbienteBadge';
 import type { PendingState } from '../live';
 import { mergeReevaluated, mergeReevaluatedMany } from '../merge';
+import { splitMessage } from '../message';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -129,17 +130,19 @@ function SummaryStats({ s }: { s: Summary }) {
 }
 
 function UrlList({ urls }: { urls: string[] }) {
+  const link = (u: string) => (
+    <a href={u} target="_blank" rel="noreferrer" className="text-primary underline-offset-2 hover:underline">
+      {u}
+    </a>
+  );
+  // Uma URL segue em texto corrido; várias viram lista
+  if (urls.length < 2) return <>{urls.map((u) => <span key={u}>{link(u)}</span>)}</>;
   return (
-    <>
-      {urls.map((u, n) => (
-        <span key={u}>
-          {n > 0 && ', '}
-          <a href={u} target="_blank" rel="noreferrer" className="text-primary underline-offset-2 hover:underline">
-            {u}
-          </a>
-        </span>
+    <ul className="mt-0.5 list-disc space-y-0.5 pl-5">
+      {urls.map((u) => (
+        <li key={u}>{link(u)}</li>
       ))}
-    </>
+    </ul>
   );
 }
 
@@ -167,18 +170,27 @@ function SectionScore({ items, pending, busy }: { items: ItemResult[]; pending?:
   return <ScoreBadge summary={summarize(finished)} />;
 }
 
+/** Selo do status do schema (verde = confere, rosa = não confere); o mesmo na linha do item e nos detalhes. */
+function SchemaBadge({ confere }: { confere: boolean }) {
+  return confere ? (
+    <Badge variant="outline" className="border-emerald-300 bg-emerald-100 text-emerald-800">
+      <CircleCheck />
+      Confere
+    </Badge>
+  ) : (
+    <Badge variant="outline" className="border-rose-300 bg-rose-100 text-rose-800">
+      <CircleX />
+      Não confere
+    </Badge>
+  );
+}
+
 /** Validação do schema: esperado pela documentação x encontrado no HTML. */
 function SchemaLine({ item }: { item: ItemResult }) {
   if (!item.schema.encontrado) return null;
   return (
     <div className="break-all text-xs text-muted-foreground">
-      Schema:{' '}
-      {item.schema.confere ? (
-        <span className="font-medium text-emerald-700">✓ confere</span>
-      ) : (
-        <span className="font-medium text-rose-700">✗ não confere</span>
-      )}{' '}
-      · encontrado <code>{item.schema.encontrado}</code>
+      Schema: <SchemaBadge confere={item.schema.confere} /> · encontrado <code>{item.schema.encontrado}</code>
       {!item.schema.confere && (
         <>
           {' '}
@@ -190,6 +202,61 @@ function SchemaLine({ item }: { item: ItemResult }) {
 }
 
 /** Explica por que o item não foi atendido, com o que era esperado e o que foi encontrado. */
+/** Mensagem do item: com mais de um motivo, vira uma lista (um motivo por linha); com um só, segue em texto corrido. */
+function MessageParts({ text, lead, skip }: { text: string; lead?: ReactNode; skip?: (part: string) => boolean }) {
+  const parts = splitMessage(text).filter((p) => !skip?.(p));
+  if (parts.length === 0) return null;
+  if (parts.length < 2) {
+    return (
+      <>
+        {lead}
+        {parts[0]}
+      </>
+    );
+  }
+  return (
+    <ul className="mt-1 list-disc space-y-0.5 pl-5">
+      {parts.map((p) => (
+        <li key={p} className="break-words">
+          {p}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+/** Parte da mensagem que informa a quantidade de ocorrências: "Encontrado (26 ocorrência(s))". */
+const FOUND_RE = /^Encontrado \((\d+) ocorrência\(s\)\)$/;
+const isFoundPart = (part: string) => FOUND_RE.test(part);
+
+/**
+ * Item atendido: no lugar do texto "Encontrado (N ocorrência(s))", mostra a lista das ocorrências (trecho e página).
+ * `compact` (linha do item) omite a página; a lista tem altura limitada e rola por dentro.
+ */
+function FoundOccurrences({ item, compact }: { item: ItemResult; compact?: boolean }) {
+  const total = splitMessage(item.message).map((p) => FOUND_RE.exec(p)).find(Boolean)?.[1];
+  if (!total || item.evidence.length === 0) return null;
+  const shown = item.evidence.length;
+  return (
+    <div className="mt-1">
+      <span>
+        Encontrado ({total} ocorrência(s){shown < Number(total) ? `, exibindo as primeiras ${shown}` : ''})
+      </span>
+      <ul className="mt-1 max-h-40 list-disc space-y-0.5 overflow-y-auto pl-5 pr-1">
+        {item.evidence.map((e, n) => (
+          <li key={`${e.pageUrl}-${n}`} className="break-all">
+            <code className="rounded bg-muted px-1">{e.snippet}</code>
+            {!compact && <> em {e.pageUrl}</>}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+/** Há lista de ocorrências no lugar do texto de contagem? (só quando a mensagem traz a contagem e há evidências) */
+const hasFoundList = (item: ItemResult) => item.evidence.length > 0 && splitMessage(item.message).some(isFoundPart);
+
 function ItemDetails({ item, page, section }: { item: ItemResult; page: PageResult; section: SectionResult }) {
   return (
     <div className="space-y-2 rounded-lg border bg-white/70 p-3 text-xs dark:bg-black/20">
@@ -207,34 +274,58 @@ function ItemDetails({ item, page, section }: { item: ItemResult; page: PageResu
           )}
         </div>
       </div>
-      <p>
-        <strong>{item.status === 'ok' ? 'Atendido' : item.status === 'empty' ? 'serigyEmpty declarado' : 'Não atendido'}:</strong> {item.message}
-      </p>
-      <p>
-        <strong>Esperado:</strong> {item.expected}
-      </p>
-      <p>
-        <strong>Schema:</strong> {item.schema.confere ? '✓ confere' : '✗ não confere'} — esperado <code>{item.schema.esperado}</code>; encontrado{' '}
-        {item.schema.encontrado ? <code>{item.schema.encontrado}</code> : 'nenhum'}
-      </p>
-      {item.serigyEmpty?.map((c, n) => (
-        <p key={`${c.pageUrl}-${n}`}>
-          <strong>serigyEmpty:</strong>{' '}
-          {c.valido ? (
-            <>declarado — motivo “{c.motivo}” (atende parcialmente)</>
-          ) : c.motivo ? (
-            <>
-              motivo “{c.motivo}” inválido — {c.problema}
-            </>
-          ) : (
-            'declarado mas motivo não informado'
-          )}
-        </p>
-      ))}
-      {item.evidence.length > 0 && (
+      <div>
+        <strong>{item.status === 'ok' ? 'Atendido' : item.status === 'empty' ? 'serigyEmpty declarado' : 'Não atendido'}:</strong>{' '}
+        <MessageParts
+          text={item.message}
+          skip={(p) => (item.serigyEmpty?.length ? p.startsWith('serigyEmpty declarado') : false) || (hasFoundList(item) && isFoundPart(p))}
+        />
+        {hasFoundList(item) && <FoundOccurrences item={item} />}
+      </div>
+      <div>
+        <strong>Esperado:</strong> <MessageParts text={item.expected} />
+      </div>
+      <div>
+        <div className="flex items-center gap-2">
+          <strong>Schema:</strong>
+          <SchemaBadge confere={item.schema.confere} />
+        </div>
+        <ul className="mt-1 list-disc space-y-0.5 pl-5">
+          <li className="break-all">
+            Esperado: <code>{item.schema.esperado}</code>
+          </li>
+          <li className="break-all">
+            Encontrado: {item.schema.encontrado ? <code>{item.schema.encontrado}</code> : 'nenhum'}
+          </li>
+        </ul>
+      </div>
+      {item.serigyEmpty && item.serigyEmpty.length > 0 && (
         <div>
-          <strong>Encontrado:</strong>
-          <ul className="mt-1 space-y-1">
+          <strong>serigyEmpty ({item.serigyEmpty.length} ocorrência(s)):</strong>
+          <ul className="mt-1 list-disc space-y-1 pl-5">
+            {item.serigyEmpty.map((c, n) => (
+              <li key={`${c.pageUrl}-${n}`} className="break-words">
+                {c.valido ? (
+                  <>declarado — motivo “{c.motivo}” (atende parcialmente)</>
+                ) : c.motivo ? (
+                  <>
+                    motivo “{c.motivo}” inválido — {c.problema}
+                  </>
+                ) : (
+                  'declarado mas motivo não informado'
+                )}{' '}
+                <span className="break-all text-muted-foreground">em {c.pageUrl}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+      {item.evidence.length > 0 && !hasFoundList(item) && (
+        <div>
+          <strong>
+            Encontrado ({item.evidence.length} ocorrência(s){item.evidence.length >= MAX_EVIDENCE ? `, exibindo as primeiras ${MAX_EVIDENCE}` : ''}):
+          </strong>
+          <ul className="mt-1 max-h-40 list-disc space-y-1 overflow-y-auto pl-5 pr-1">
             {item.evidence.map((e) => (
               <li key={e.pageUrl + e.snippet} className="break-all">
                 <code className="rounded bg-muted px-1">{e.snippet}</code> em {e.pageUrl}
@@ -738,7 +829,9 @@ export function ResultView({ result, onChange, pending, progress, onCancel, read
                                 <div className="min-w-0 flex-1 text-sm">
                                   <div className="font-medium">{i.descricao}</div>
                                   <div className="text-xs text-muted-foreground">
-                                    <code>{i.atributo}</code> · {i.message}
+                                    <code>{i.atributo}</code>
+                                    <MessageParts text={i.message} lead=" · " skip={hasFoundList(i) ? isFoundPart : undefined} />
+                                    {hasFoundList(i) && <FoundOccurrences item={i} compact />}
                                   </div>
                                   <SchemaLine item={i} />
                                   <div className="break-all text-xs text-muted-foreground">
