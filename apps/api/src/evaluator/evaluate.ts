@@ -62,6 +62,8 @@ const unique = <T>(list: T[]): T[] => [...new Set(list)];
 interface SectionScope {
   /** URL (efetivamente usada) da página do "Caminho URL" da seção. */
   url: string;
+  /** URL esperada pela documentação (caminho da seção sobre a URL informada). */
+  expectedUrl: string;
   caminho?: string;
 }
 
@@ -119,6 +121,7 @@ function evaluateCore(item: CatalogItem, sectionId: string, page: CatalogPage, s
     descricao: item.descricao,
     criterios: item.criterios,
     tipos: item.tipos,
+    expectedUrl: scope.expectedUrl,
     expected: describeExpected(item, page.schemaUrl),
   };
   const evidence = (list: MarkupElement[]) => list.slice(0, MAX_EVIDENCE).map((e) => ({ pageUrl: e.pageUrl, snippet: e.snippet }));
@@ -443,7 +446,7 @@ export function prepareEvaluation(req: EvaluationRequest, deps: EvaluateDeps = {
       const used = store.resolved.get(urlKey(requested)) ?? requested;
       await store.followDelegations(used, shouldFollow);
 
-      const scope: SectionScope = { url: used, caminho: section.caminhoUrl };
+      const scope: SectionScope = { url: used, expectedUrl: requested, caminho: section.caminhoUrl };
       for (const item of items) {
         const result = evaluateItem(item, section.id, page, scope, store);
         done.set(item.id, result);

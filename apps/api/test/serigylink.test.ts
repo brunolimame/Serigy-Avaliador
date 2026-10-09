@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { analyzedMatchesExpected } from '@serigy/shared';
 import { evaluate } from '../src/evaluator/evaluate';
 import { renderMarkdown } from '../src/report/markdown';
 import { FakeLoader, find, SCHEMAS } from './helpers';
@@ -69,6 +70,18 @@ describe('serigyLink fora de qualquer serigySchema', () => {
       ['4.1.16'],
     );
     expect(find(r, '4.1.16')).toMatchObject({ status: 'ok', analyzedUrls: [TARGET] });
+  });
+
+  it('informa a URL esperada e se a analisada é a mesma ou outra', async () => {
+    const direto = await run({ [D]: `<div serigySchema="${SCHEMA}"><b serigyItem="valorEmpenhado">1,00</b></div>` });
+    // a documentação grafa o caminho como /Despesas; o site responde em minúsculas e ainda é "a esperada"
+    expect(find(direto, '4.1.1')).toMatchObject({ expectedUrl: 'https://p.gov.br/Despesas', analyzedUrls: [D] });
+    expect(analyzedMatchesExpected(find(direto, '4.1.1'))).toBe(true);
+
+    const via = await run({ [D]: `<div serigySchema="${SCHEMA}" serigyLink="${TARGET}"></div>`, [TARGET]: targetPage });
+    expect(find(via, '4.1.1')).toMatchObject({ analyzedUrls: [TARGET] });
+    expect(analyzedMatchesExpected(find(via, '4.1.1'))).toBe(false);
+    expect(renderMarkdown(via)).toContain('URL diferente da esperada');
   });
 
   it('não baixa serigyLink de item que não está sendo avaliado', async () => {

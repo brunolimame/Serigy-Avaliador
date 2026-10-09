@@ -1,4 +1,4 @@
-import { AMBIENTES, compareIds, groupPagesByNumber, MAX_EVIDENCE, splitMessage, summarize, type EvaluationResult, type FetchOrigin, type ItemResult, type ItemStatus, type PageResult, type SectionResult, type Summary } from '@serigy/shared';
+import { AMBIENTES, analyzedMatchesExpected, compareIds, groupPagesByNumber, MAX_EVIDENCE, splitMessage, summarize, type EvaluationResult, type FetchOrigin, type ItemResult, type ItemStatus, type PageResult, type SectionResult, type Summary } from '@serigy/shared';
 
 const ICON: Record<ItemStatus, string> = { ok: '✅', warning: '⚠️', empty: '➖', missing: '❌' };
 const LABEL: Record<ItemStatus, string> = {
@@ -38,10 +38,18 @@ const ORIGIN: Record<FetchOrigin, string> = {
   serigyLink: 'serigyLink',
 };
 
+/** Selo comparando a URL analisada com a esperada pela documentação. */
+function urlMatchTag(i: ItemResult): string {
+  const same = analyzedMatchesExpected(i);
+  return same === undefined ? '' : same ? '🟢 URL esperada' : '🟠 URL diferente da esperada';
+}
+
 /** Célula "URL analisada" de um item, identificando quando o conteúdo vem de iframe/serigyLink. */
 function analyzedCell(i: ItemResult): string {
   const via = i.loadedVia?.some((v) => v.kind === 'iframe') ? '<br>_via iframe (serigyLink)_' : i.loadedVia?.length ? '<br>_via serigyLink_' : '';
-  return urlLinks(i.analyzedUrls) + via;
+  const tag = urlMatchTag(i);
+  const expected = i.expectedUrl ? `esperada: ${urlLinks([i.expectedUrl])}<br>` : '';
+  return `${expected}${urlLinks(i.analyzedUrls)}${tag ? `<br>${tag}` : ''}${via}`;
 }
 
 function summaryTable(s: Summary): string[] {
@@ -76,11 +84,13 @@ function itemDetail(out: string[], p: PageResult, s: SectionResult, i: ItemResul
   out.push(
     `- **Schema:** ${i.schema.confere ? '✅ confere' : '❌ não confere'} — esperado ${code(i.schema.esperado)}; encontrado ${i.schema.encontrado ? code(i.schema.encontrado) : 'nenhum'}`,
   );
+  if (i.expectedUrl) out.push(`- **URL esperada:** ${urlLinks([i.expectedUrl])}`);
   const urls = urlLinks(i.analyzedUrls).split('<br>');
+  const tag = urlMatchTag(i);
   if (urls.length > 1) {
-    out.push('- **URL analisada:**');
+    out.push(`- **URL analisada:**${tag ? ` ${tag}` : ''}`);
     for (const u of urls) out.push(`  - ${u}`);
-  } else out.push(`- **URL analisada:** ${urls.join('')}`);
+  } else out.push(`- **URL analisada:** ${urls.join('')}${tag ? ` — ${tag}` : ''}`);
   for (const v of i.loadedVia ?? []) {
     out.push(`- **${v.kind === 'iframe' ? 'Carregado via iframe' : `Via serigyLink${v.tag ? ` (${code(`<${v.tag}>`)})` : ''}`}:** serigyLink avaliado ${v.url}`);
   }

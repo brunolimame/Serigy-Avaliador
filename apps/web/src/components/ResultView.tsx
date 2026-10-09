@@ -17,7 +17,7 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import type { EvaluationResult, ItemResult, ItemStatus, PageResult, SectionResult, Summary } from '@serigy/shared';
-import { groupPagesByNumber, MAX_EVIDENCE, summarize } from '@serigy/shared';
+import { analyzedMatchesExpected, groupPagesByNumber, MAX_EVIDENCE, summarize } from '@serigy/shared';
 import { api, download } from '../api';
 import { SCORE_STYLE, scoreTone, type ScoreTone } from '../score';
 import { displayWait, groupIconState, pendingIconKind } from '../status-icons';
@@ -143,6 +143,21 @@ function UrlList({ urls }: { urls: string[] }) {
         <li key={u}>{link(u)}</li>
       ))}
     </ul>
+  );
+}
+
+/** Selo: a URL analisada é a esperada pela documentação ou outra (ex.: destino de serigyLink)? */
+function UrlMatchBadge({ item }: { item: ItemResult }) {
+  const same = analyzedMatchesExpected(item);
+  if (same === undefined) return null;
+  return same ? (
+    <Badge variant="outline" className="border-emerald-300 bg-emerald-100 text-emerald-800 dark:border-emerald-800 dark:bg-emerald-900/50 dark:text-emerald-200">
+      URL esperada
+    </Badge>
+  ) : (
+    <Badge variant="outline" className="border-amber-300 bg-amber-100 text-amber-800 dark:border-amber-800 dark:bg-amber-900/50 dark:text-amber-200">
+      URL diferente da esperada
+    </Badge>
   );
 }
 
@@ -869,8 +884,13 @@ export function ResultView({ result, onChange, pending, progress, onCancel, read
                                     {hasFoundList(i) && <FoundOccurrences item={i} compact />}
                                   </div>
                                   <SchemaLine item={i} />
+                                  {i.expectedUrl && (
+                                    <div className="break-all text-xs text-muted-foreground">
+                                      URL esperada: <UrlList urls={[i.expectedUrl]} />
+                                    </div>
+                                  )}
                                   <div className="break-all text-xs text-muted-foreground">
-                                    URL analisada: <UrlList urls={i.analyzedUrls} />
+                                    URL analisada: <UrlMatchBadge item={i} /> <UrlList urls={i.analyzedUrls} />
                                   </div>
 
                                   {/* Alerta do iframe junto do item que depende dele */}

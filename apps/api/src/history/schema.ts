@@ -40,6 +40,7 @@ const itemSchema = z.strictObject({
   message: text(4000),
   expected: text(2000),
   examples: z.array(z.strictObject({ title: text(300), html: text(20000) })).max(5).optional(),
+  expectedUrl: httpUrl.optional(),
   analyzedUrls: z.array(httpUrl).max(100),
   loadedVia: z
     .array(z.strictObject({ kind: z.enum(['iframe', 'serigyLink']), url: httpUrl, tag: text(40).optional() }))

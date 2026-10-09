@@ -204,6 +204,8 @@ export interface ItemResult {
   expected: string;
   /** Exemplos da documentação; só preenchido quando o item não foi atendido. */
   examples?: CatalogExample[];
+  /** URL esperada pela documentação (caminho da seção); ausente em avaliações antigas do histórico. */
+  expectedUrl?: string;
   /**
    * URL(s) efetivamente analisada(s) para o item: onde foi encontrado; ou, se não foi,
    * o destino do serigyLink / as páginas onde o schema existe / a URL inicial.
@@ -220,6 +222,17 @@ export interface ItemResult {
   serigyEmpty?: SerigyEmptyCheck[];
   /** Até 3 trechos de HTML que comprovam o achado. */
   evidence: Array<{ pageUrl: string; snippet: string }>;
+}
+
+/**
+ * A URL analisada é a esperada pela documentação? `undefined` quando não há URL esperada registrada
+ * ou nada foi analisado. Compara sem diferenciar caixa nem barra final (como o coletor).
+ */
+export function analyzedMatchesExpected(item: Pick<ItemResult, 'expectedUrl' | 'analyzedUrls'>): boolean | undefined {
+  if (!item.expectedUrl || item.analyzedUrls.length === 0) return undefined;
+  const key = (u: string) => u.replace(/\/+$/, '').toLowerCase();
+  const expected = key(item.expectedUrl);
+  return item.analyzedUrls.every((u) => key(u) === expected);
 }
 
 export interface Summary {
