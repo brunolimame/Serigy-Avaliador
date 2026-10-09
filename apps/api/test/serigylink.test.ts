@@ -60,6 +60,17 @@ describe('serigyLink fora de qualquer serigySchema', () => {
     expect(loader.calls).not.toContain('https://exp.com/x');
   });
 
+  it('item de exportação é procurado no destino do serigyLink do schema inteiro', async () => {
+    const r = await run(
+      {
+        [D]: `<div serigySchema="${SCHEMA}" serigyLink="${TARGET}"></div>`,
+        [TARGET]: `<div serigySchema="${SCHEMA}"><a serigyItem="salvarRelatorio" serigyValue="pdf">PDF</a></div>`,
+      },
+      ['4.1.16'],
+    );
+    expect(find(r, '4.1.16')).toMatchObject({ status: 'ok', analyzedUrls: [TARGET] });
+  });
+
   it('não baixa serigyLink de item que não está sendo avaliado', async () => {
     const loader = new FakeLoader({
       [P]: '<html/>',

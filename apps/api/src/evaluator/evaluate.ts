@@ -74,8 +74,11 @@ interface SectionScope {
  *  - elemento fora de qualquer serigySchema (`schema` indefinido) -> vale para o schema do item avaliado.
  */
 function delegationsFor(ctx: Context, scope: SectionScope, schemaKey: string, atributo: string): Delegation[] {
-  if (MAPPING_ONLY.has(atributo)) return [];
-  const applies = (d: Delegation) => (d.schema === undefined || d.schema === schemaKey) && (!d.item || d.item === atributo);
+  // Itens de exportação: o serigyLink do próprio item (link de download) nunca é seguido, mas o do schema
+  // inteiro (sem serigyItem) é a página onde o mapeamento deve ser procurado.
+  const exportItem = MAPPING_ONLY.has(atributo);
+  const applies = (d: Delegation) =>
+    (d.schema === undefined || d.schema === schemaKey) && (d.item ? !exportItem && d.item === atributo : true);
 
   const found: Delegation[] = [];
   const visited = new Set<string>([urlKey(scope.url)]);
