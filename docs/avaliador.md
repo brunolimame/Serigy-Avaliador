@@ -254,7 +254,7 @@ Status de cada item:
   O selo de grupo/seção mostra `93.8% · 30/32` e, quando existirem, dois contadores separados, só com ícone e
   número: parcialmente atendidos (`empty`, azul-claro) e não atendidos (`warning` + `missing`, rosa).
 - **Cabeçalho `<th>`**: elemento `<th>` com `serigyItem` é o cabeçalho do item (o primeiro da lista); só os demais
-  (`<td>`) têm o valor validado. Se existir apenas o `<th>`, o item é `ok` (presente), sem validação de valor.
+  (`<td>`) têm o valor validado. Se existir apenas o `<th>`, sem nenhum `<td>` para validar, o item **não atende** (`warning`).
 - **Tipos** (`checks.ts`, tabela `TYPES`): Numérico, Número, Monetário, Ano, Data, Hora, Telefone, CPF, E-mail,
   Link, Anexo, Arquivo e Imagem têm validação heurística (caixa e acentos são ignorados; `Número/Ano` vale
   qualquer um dos dois). Texto, Nome, Endereço, Variável, N/A, Dataset etc. só exigem a presença do item. Se o

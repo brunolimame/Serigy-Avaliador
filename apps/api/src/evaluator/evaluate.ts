@@ -241,7 +241,7 @@ function evaluateCore(item: CatalogItem, sectionId: string, page: CatalogPage, s
   }
 
   // <th> com serigyItem é o CABEÇALHO do item (o primeiro da lista); os valores a validar são os <td>.
-  // Só há cabeçalho (sem <td>): o item está presente, mas não há valores para validar.
+  // Só há cabeçalho (sem <td>): não há valor a validar e o item não atende.
   const values = hits.filter((e) => e.tag !== 'th');
   const headerOnly = values.length === 0;
   if (!headerOnly) hits = values;
@@ -292,8 +292,8 @@ function evaluateCore(item: CatalogItem, sectionId: string, page: CatalogPage, s
   if (headerOnly) {
     return finish({
       ...base,
-      status: 'ok',
-      message: `Encontrado apenas o cabeçalho (<th>, ${filled.length} ocorrência(s)); sem valores (<td>) para validar`,
+      status: 'warning',
+      message: `Encontrado apenas o cabeçalho (<th>, ${filled.length} ocorrência(s)); nenhum valor (<td>) para validar`,
       analyzedUrls,
       evidence: evidence(filled),
     });

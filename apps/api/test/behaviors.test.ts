@@ -197,10 +197,10 @@ describe('cabeçalho <th> x valores <td>', () => {
     expect(find(await run(loader, { items: ['4.1.1'] }), '4.1.1').status).toBe('warning');
   });
 
-  it('só th: item presente, sem valores a validar', async () => {
+  it('só th: sem valores (td) para validar, o item não atende', async () => {
     const loader = page('<tr><th serigyItem="valorEmpenhado">Valor empenhado</th></tr>');
     const i = find(await run(loader, { items: ['4.1.1'] }), '4.1.1');
-    expect(i.status).toBe('ok');
+    expect(i.status).toBe('warning');
     expect(i.message).toContain('cabeçalho');
   });
 });
