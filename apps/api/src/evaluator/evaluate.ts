@@ -240,6 +240,12 @@ function evaluateCore(item: CatalogItem, sectionId: string, page: CatalogPage, s
     return done({ ...base, status: 'missing', message, analyzedUrls: [scope.url], evidence: evidence(sameAttr) });
   }
 
+  // <th> com serigyItem é o CABEÇALHO do item (o primeiro da lista); os valores a validar são os <td>.
+  // Só há cabeçalho (sem <td>): o item está presente, mas não há valores para validar.
+  const values = hits.filter((e) => e.tag !== 'th');
+  const headerOnly = values.length === 0;
+  if (!headerOnly) hits = values;
+
   const analyzedUrls = unique(hits.map((e) => e.pageUrl));
   const filled = hits.filter((e) => e.empty === undefined);
 
@@ -278,6 +284,16 @@ function evaluateCore(item: CatalogItem, sectionId: string, page: CatalogPage, s
       ...base,
       status: 'ok',
       message: `Mapeado (${filled.length} ocorrência(s)); a exportação não é executada${formats.length ? ` — formatos: ${formats.join(', ')}` : ''}`,
+      analyzedUrls,
+      evidence: evidence(filled),
+    });
+  }
+
+  if (headerOnly) {
+    return finish({
+      ...base,
+      status: 'ok',
+      message: `Encontrado apenas o cabeçalho (<th>, ${filled.length} ocorrência(s)); sem valores (<td>) para validar`,
       analyzedUrls,
       evidence: evidence(filled),
     });

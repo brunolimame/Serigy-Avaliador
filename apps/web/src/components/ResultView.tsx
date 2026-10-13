@@ -174,6 +174,8 @@ function ScoreBadge({ summary }: { summary: Summary }) {
   return (
     <Badge variant="outline" className={cn('font-medium tabular-nums', tone.badge)}>
       {summary.score}% · {summary.ok + summary.empty}/{summary.total}
+      {summary.empty > 0 && ` · ${summary.empty} parcialmente`}
+      {summary.warning + summary.missing > 0 && ` · ${summary.warning + summary.missing} não atendido(s)`}
     </Badge>
   );
 }

@@ -183,3 +183,24 @@ describe('reavaliar item (mesclagem do resultado)', () => {
     expect(current.summary.missing).toBe(1); // o original não é alterado
   });
 });
+
+describe('cabeçalho <th> x valores <td>', () => {
+  const page = (rows: string) => new FakeLoader({ [P]: '<html/>', [D]: `<table serigySchema="${SCHEMA}">${rows}</table>` });
+
+  it('th é o cabeçalho: só os td são validados', async () => {
+    const loader = page('<tr><th serigyItem="valorEmpenhado">Valor empenhado</th></tr><tr><td serigyItem="valorEmpenhado">1.000,00</td></tr>');
+    expect(find(await run(loader, { items: ['4.1.1'] }), '4.1.1').status).toBe('ok');
+  });
+
+  it('valor inválido em td continua sendo apontado, mesmo com th válido', async () => {
+    const loader = page('<tr><th serigyItem="valorEmpenhado">Empenho 2026</th></tr><tr><td serigyItem="valorEmpenhado">sem valor</td></tr>');
+    expect(find(await run(loader, { items: ['4.1.1'] }), '4.1.1').status).toBe('warning');
+  });
+
+  it('só th: item presente, sem valores a validar', async () => {
+    const loader = page('<tr><th serigyItem="valorEmpenhado">Valor empenhado</th></tr>');
+    const i = find(await run(loader, { items: ['4.1.1'] }), '4.1.1');
+    expect(i.status).toBe('ok');
+    expect(i.message).toContain('cabeçalho');
+  });
+});
