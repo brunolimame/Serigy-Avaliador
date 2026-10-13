@@ -168,15 +168,36 @@ const SCORE_ICON: Record<ScoreTone, { icon: LucideIcon; className: string; label
   red: { icon: CircleX, className: 'text-rose-600 dark:text-rose-400', label: 'Atendimento baixo' },
 };
 
-/** Selo do percentual de atendimento: < 40% vermelho, de 40% a < 100% amarelo, 100% verde. */
+/**
+ * Selos do atendimento: percentual (< 40% vermelho, de 40% a < 100% amarelo, 100% verde) e, quando existirem,
+ * um contador separado e com a cor própria para parcialmente atendidos (serigyEmpty) e não atendidos (atenção + não encontrado).
+ */
 function ScoreBadge({ summary }: { summary: Summary }) {
   const tone = SCORE_STYLE[scoreTone(summary.score)];
+  const unmet = summary.warning + summary.missing;
+  const counter = (status: ItemStatus, count: number, label: string) => {
+    const t = TONE[status];
+    const Icon = t.icon;
+    return (
+      <Badge
+        variant='outline'
+        className={cn('border-transparent font-medium tabular-nums', t.chip)}
+        title={`${count} ${label}`}
+        aria-label={`${count} ${label}`}
+      >
+        <Icon aria-hidden />
+        {count}
+      </Badge>
+    );
+  };
   return (
-    <Badge variant="outline" className={cn('font-medium tabular-nums', tone.badge)}>
-      {summary.score}% · {summary.ok + summary.empty}/{summary.total}
-      {summary.empty > 0 && ` · ${summary.empty} parcialmente`}
-      {summary.warning + summary.missing > 0 && ` · ${summary.warning + summary.missing} não atendido(s)`}
-    </Badge>
+    <span className='inline-flex flex-wrap items-center gap-1.5'>
+      <Badge variant='outline' className={cn('font-medium tabular-nums', tone.badge)}>
+        {summary.score}% · {summary.ok + summary.empty}/{summary.total}
+      </Badge>
+      {summary.empty > 0 && counter('empty', summary.empty, 'parcialmente atendido(s)')}
+      {unmet > 0 && counter('missing', unmet, 'não atendido(s)')}
+    </span>
   );
 }
 

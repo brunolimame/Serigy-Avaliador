@@ -251,8 +251,8 @@ Status de cada item:
   caminhos como `/Despesas`, mas o site pode usar `/despesas`.
 - O valor de `serigyItem` é comparado **exatamente** (caixa importa); se só a caixa difere, a mensagem avisa.
 - **Atendimento (%)** = (`ok` + `empty`) / total de itens avaliados. `warning` não conta como atendido.
-  O selo de grupo/seção mostra `93.8% · 30/32` e, quando existirem, `· N parcialmente` (`empty`) e
-  `· N não atendido(s)` (`warning` + `missing`).
+  O selo de grupo/seção mostra `93.8% · 30/32` e, quando existirem, dois contadores separados, só com ícone e
+  número: parcialmente atendidos (`empty`, azul-claro) e não atendidos (`warning` + `missing`, rosa).
 - **Cabeçalho `<th>`**: elemento `<th>` com `serigyItem` é o cabeçalho do item (o primeiro da lista); só os demais
   (`<td>`) têm o valor validado. Se existir apenas o `<th>`, o item é `ok` (presente), sem validação de valor.
 - **Tipos** (`checks.ts`, tabela `TYPES`): Numérico, Número, Monetário, Ano, Data, Hora, Telefone, CPF, E-mail,
