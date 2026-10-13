@@ -307,7 +307,7 @@ export function App() {
         <Info className="text-amber-600 dark:text-amber-400" />
         <AlertTitle>Ferramenta de análise SERIGY</AlertTitle>
         <AlertDescription className="text-amber-950/90 dark:text-amber-200">
-          Está é uma ferramenta de análise com o objetivo de poiar o desenvolvimento: verifica o mapeamento da marcação Serigy do portal contra a matriz de requisitos
+          Está é uma ferramenta de análise, com o objetivo ajudar no desenvolvimento: verifica o mapeamento da marcação Serigy do portal contra a matriz de requisitos
           e ajuda a corrigir o que falta antes da validação oficial. Ela <strong>não substitui</strong> a validação realizada pelo Serigy; o
           resultado que vale é o do{' '}
           <a href={SERIGY_URL} target="_blank" rel="noreferrer" className={link}>

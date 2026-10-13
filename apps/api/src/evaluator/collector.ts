@@ -11,7 +11,7 @@ export const urlKey = (url: string): string => url.replace(/\/+$/, '').toLowerCa
 
 const isOk = (p: LoadedPage): boolean => p.html !== null && !p.error;
 
-function lowerPath(url: string): string {
+export function lowerPath(url: string): string {
   try {
     const u = new URL(url);
     u.pathname = u.pathname.toLowerCase();

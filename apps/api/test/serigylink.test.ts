@@ -74,8 +74,16 @@ describe('serigyLink fora de qualquer serigySchema', () => {
 
   it('informa a URL esperada e se a analisada é a mesma ou outra', async () => {
     const direto = await run({ [D]: `<div serigySchema="${SCHEMA}"><b serigyItem="valorEmpenhado">1,00</b></div>` });
-    // a documentação grafa o caminho como /Despesas; o site responde em minúsculas e ainda é "a esperada"
-    expect(find(direto, '4.1.1')).toMatchObject({ expectedUrl: 'https://p.gov.br/Despesas', analyzedUrls: [D] });
+    // a documentação grafa o caminho como /Despesas; por padrão a URL esperada é exibida em minúsculas
+    expect(find(direto, '4.1.1')).toMatchObject({ expectedUrl: D, analyzedUrls: [D] });
+
+    // com a opção "testar a grafia da documentação", a esperada mantém as maiúsculas
+    const grafia = await evaluate(
+      { url: P, poder: 'executivo', items: ['4.1.1'], tryDocumentedCase: true },
+      { loader: new FakeLoader({ [P]: '<html/>', [D]: `<div serigySchema="${SCHEMA}"><b serigyItem="valorEmpenhado">1,00</b></div>` }) },
+    );
+    expect(find(grafia, '4.1.1')).toMatchObject({ expectedUrl: 'https://p.gov.br/Despesas' });
+    expect(analyzedMatchesExpected(find(grafia, '4.1.1'))).toBe(true);
     expect(analyzedMatchesExpected(find(direto, '4.1.1'))).toBe(true);
 
     const via = await run({ [D]: `<div serigySchema="${SCHEMA}" serigyLink="${TARGET}"></div>`, [TARGET]: targetPage });

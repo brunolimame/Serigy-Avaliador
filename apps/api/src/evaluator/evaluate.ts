@@ -15,7 +15,7 @@ import type {
 import { DEFAULT_MAX_PAGES, MAX_EVIDENCE, summarize } from '@serigy/shared';
 import { getPoder, loadCatalog, pagesForPoder } from '../catalog/load';
 import { describeExpected, validateType } from './checks';
-import { PageStore, urlKey } from './collector';
+import { lowerPath, PageStore, urlKey } from './collector';
 import type { PageLoader } from './loader';
 import { createLoader, type CreatedLoader } from './loader-factory';
 import { canonicalSchema, normalizeSchema, type Delegation, type MarkupElement, type PageMarkup, type YearFilter } from './markup';
@@ -462,7 +462,9 @@ export function prepareEvaluation(req: EvaluationRequest, deps: EvaluateDeps = {
       const used = store.resolved.get(urlKey(requested)) ?? requested;
       await store.followDelegations(used, shouldFollow);
 
-      const scope: SectionScope = { url: used, expectedUrl: requested, caminho: section.caminhoUrl };
+      // URL esperada em minúsculas por padrão; a grafia da documentação só com `tryDocumentedCase`
+      const expectedUrl = tryDocumentedCase ? requested : lowerPath(requested);
+      const scope: SectionScope = { url: used, expectedUrl, caminho: section.caminhoUrl };
       for (const item of items) {
         const result = evaluateItem(item, section.id, page, scope, store);
         done.set(item.id, result);

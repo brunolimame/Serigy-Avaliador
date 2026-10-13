@@ -323,7 +323,8 @@ Status de cada item:
     limite `maxPages`.
 - **URL analisada**: cada item traz `analyzedUrls`: a página do caminho da sua seção (onde foi ou deveria ser
   encontrado) ou, havendo `serigyLink`, o(s) destino(s). Aparece na UI e no relatório (coluna "URL analisada").
-  Antes dela vai a **URL esperada** (`expectedUrl`: o caminho da seção na documentação) e um selo indica se a
+  Antes dela vai a **URL esperada** (`expectedUrl`: o caminho da seção na documentação, em minúsculas; com a grafia da documentação só quando
+  "Testar também a grafia da documentação" está ativa) e um selo indica se a
   analisada é a esperada ou outra (ex.: destino de `serigyLink`), via `analyzedMatchesExpected` em `packages/shared`.
   `expectedUrl` é opcional no formato exportado (avaliações antigas continuam importáveis; sem ela não há selo).
 - **Exportação de dados (`salvarRelatorio`)**: apenas se verifica se o `serigyItem` está mapeado (`MAPPING_ONLY`
