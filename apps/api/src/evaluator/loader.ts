@@ -21,6 +21,8 @@ export interface AnoRequest {
   ano: string;
   /** Valor do `serigyExecuteWaitSection` do filtro; o `serigyLoadSection` de mesmo valor é a seção que deve mudar. */
   waitSection: string;
+  /** Quanto esperar a seção mudar, em ms (padrão do carregador: 30 s). */
+  timeoutMs?: number;
 }
 
 export interface PageLoader {

@@ -150,6 +150,8 @@ export interface EvaluationRequest {
    * 3 = 2026, 2025, 2024 e 2023). Padrão: configuração `comportamento.anosHistorico`.
    */
   anosHistorico?: number;
+  /** Segundos esperando a seção mudar depois de trocar o ano (5 a 120). Padrão: configuração `comportamento.esperaAnoSegundos` (30). */
+  esperaAnoSegundos?: number;
 }
 
 export type Renderer = 'browser' | 'http';
@@ -451,14 +453,36 @@ export function descreverAnoProblema(a: HistoricoAno): string {
 }
 
 /**
+ * Veredito Serigy estimado a partir dos anos (o primeiro é o ano atual, os demais são os anteriores). Hipótese calibrada
+ * com o OP Consórcio (30/10/2026): o Serigy não pontua quando NENHUM ano anterior passa na troca de ano, nem quando
+ * nenhum ano tem dados (a tabela vazia não muda: TABLE_NOT_CHANGED); basta um ano anterior passar para pontuar.
+ */
+export function vereditoDosAnos(anos: HistoricoAno[]): SerigyVeredito | undefined {
+  const anteriores = anos.slice(1);
+  if (anteriores.length === 0) return undefined;
+  if (!anteriores.some((a) => a.passou)) {
+    const falha = anteriores[0]!;
+    return { ponto: false, codigo: falha.codigo ?? 'ERROR_ON_SET_OPTION', detalhe: `Nenhum ano anterior passou na troca de ano (${anteriores.map((a) => a.ano).join(', ')}).` };
+  }
+  if (!anos.some((a) => a.passou && a.comDados)) {
+    return { ponto: false, codigo: 'TABLE_NOT_CHANGED', detalhe: 'Nenhum ano tem linhas de dados: a seção não muda ao trocar o ano.' };
+  }
+  return undefined;
+}
+
+/**
  * Anexa a análise dos anos ao item do `historicoExercicio`. Algum ano que falhou ou sem dados deixa o item atendido em
- * "Atenção" (o veredito Serigy estimado não muda); os demais status ficam como estão.
+ * "Atenção"; o veredito Serigy estimado muda conforme `vereditoDosAnos`. Os demais status ficam como estão.
  */
 export function withHistoricoAnos(item: ItemResult, anos: HistoricoAno[]): ItemResult {
   const problemas = anosComProblema(anos);
-  if (problemas.length === 0 || (item.status !== 'ok' && item.status !== 'empty')) return { ...item, anos };
-  const nota = `Atenção: ${problemas.map(descreverAnoProblema).join('; ')}`;
-  return { ...item, anos, status: 'warning', message: item.message ? `${item.message}; ${nota}` : nota };
+  const veredito = item.serigy?.ponto ? vereditoDosAnos(anos) : undefined;
+  const serigy = veredito ?? item.serigy;
+  if (problemas.length === 0 || (item.status !== 'ok' && item.status !== 'empty')) return { ...item, anos, ...(serigy ? { serigy } : {}) };
+  const notas = [`Atenção: ${problemas.map(descreverAnoProblema).join('; ')}`];
+  if (veredito) notas.push(serigyAtencao('estimado', veredito.codigo));
+  const nota = notas.join('; ');
+  return { ...item, anos, ...(serigy ? { serigy } : {}), status: 'warning', message: item.message ? `${item.message}; ${nota}` : nota };
 }
 
 /** Resume uma lista de itens. `score` = (ok + empty) / total, de 0 a 100. */
@@ -581,6 +605,9 @@ export const DEFAULT_MAX_PAGES = 40;
 /** Padrão de anos anteriores ao atual analisados no `historicoExercicio`. */
 export const DEFAULT_ANOS_HISTORICO = 3;
 
+/** Padrão de segundos esperando a seção mudar depois de trocar o ano (o validador oficial espera 30 s). */
+export const DEFAULT_ESPERA_ANO_SEGUNDOS = 30;
+
 export type SettingValue = boolean | number;
 
 /**
@@ -651,6 +678,17 @@ export const SETTINGS: SettingDef[] = [
     rotulo: 'Anos anteriores analisados no histórico',
     descricao:
       'Quantos anos ANTES do atual são analisados no histórico (historicoExercicio), além do atual: com 3, em 2026 são 2026, 2025, 2024 e 2023. Cada ano seleciona a opção no filtro, executa o serigyExecuteWaitSection e espera a seção mudar (só com o navegador). Ano que falha ou que não tem nenhuma linha de dados deixa o item em Atenção.',
+  },
+  {
+    chave: 'comportamento.esperaAnoSegundos',
+    categoria: 'comportamento',
+    tipo: 'number',
+    padrao: DEFAULT_ESPERA_ANO_SEGUNDOS,
+    min: 5,
+    max: 120,
+    rotulo: 'Segundos esperando a troca de ano do histórico',
+    descricao:
+      'Quanto tempo cada ano do histórico espera a seção (serigyLoadSection) mudar depois de selecionar o ano e executar o serigyExecuteWaitSection. O validador oficial espera 30 s: valores menores deixam a avaliação mais rápida, mas podem reprovar um ano que o Serigy aprovaria.',
   },
   {
     chave: 'comportamento.compatibilidadeSerigy',

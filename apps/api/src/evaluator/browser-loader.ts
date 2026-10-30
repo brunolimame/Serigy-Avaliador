@@ -271,8 +271,8 @@ export class BrowserLoader implements PageLoader {
    *  - mudou: "sem dados" quando não há nenhuma linha (<tr> com <td>, fora de serigyEmpty)
    * Só clica no elemento do serigyExecuteWaitSection do filtro, nunca em item de exportação.
    */
-  async analisarAno({ url, ano, waitSection }: AnoRequest): Promise<HistoricoAno> {
-    const timeout = this.opts.anoTimeoutMs;
+  async analisarAno({ url, ano, waitSection, timeoutMs }: AnoRequest): Promise<HistoricoAno> {
+    const timeout = timeoutMs ?? this.opts.anoTimeoutMs;
     const falha = (codigo: NonNullable<HistoricoAno['codigo']>, detalhe: string): HistoricoAno => ({ ano, passou: false, codigo, detalhe });
     const page = await this.context.newPage();
     page.on('dialog', (d) => void d.dismiss().catch(() => undefined));
@@ -344,14 +344,20 @@ export class BrowserLoader implements PageLoader {
         return falha('TABLE_NOT_CHANGED', `O valor ${ano} não alterou [serigyLoadSection=${load}]: Waiting failed: ${timeout}ms exceeded`);
       }
       await page.waitForLoadState('networkidle', { timeout: this.opts.settleMs }).catch(() => undefined);
+      // Linhas de dados: <tr> com <td> (fora de serigyEmpty). Sem nenhum <tr> (lista de <div>, por exemplo), valem os
+      // elementos com serigyItem de dados dentro da seção.
       const linhas = await page
-        .evaluate(
-          (sel) =>
-            [...(document.querySelector(sel)?.querySelectorAll('tr') ?? [])].filter(
-              (tr) => tr.querySelector('td') && !tr.hasAttribute('serigyempty') && !tr.querySelector('[serigyempty]'),
-            ).length,
-          loadSelector,
-        )
+        .evaluate((sel) => {
+          const secao = document.querySelector(sel);
+          if (!secao) return 0;
+          // Só arrows anônimas aqui: o tsx injeta o helper __name em funções nomeadas, que não existe no navegador.
+          const trs = [...secao.querySelectorAll('tr')];
+          const dados =
+            trs.length > 0
+              ? trs.filter((tr) => tr.querySelector('td') !== null)
+              : [...secao.querySelectorAll('[serigyitem]')].filter((el) => el.tagName !== 'TH');
+          return dados.filter((el) => !el.hasAttribute('serigyempty') && el.closest('[serigyempty]') === null && el.querySelector('[serigyempty]') === null).length;
+        }, loadSelector)
         .catch(() => 0);
       return { ano, passou: true, comDados: linhas > 0, ...(linhas === 0 ? { detalhe: `Nenhuma linha de dados em [serigyLoadSection=${load}]` } : {}) };
     } finally {

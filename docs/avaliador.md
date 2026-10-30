@@ -139,7 +139,8 @@ Janela estilo VS Code (botão "Configurações" ou **Ctrl+,** / **Cmd+,**; Esc f
   uma configuração, acrescente uma entrada: a API valida pelo tipo/faixa e o painel desenha o controle sozinho.
 - **Configurações atuais:** `comportamento.navegador` (padrão ligado), `comportamento.maxPaginasSerigyLink` (padrão
   **40**, 1–200), `comportamento.testarGrafiaDocumentacao` (padrão desligado) e `comportamento.anosHistorico` (padrão
-  **3**, 1–10: anos ANTERIORES ao atual analisados no `historicoExercicio`; ver "Análise dos anos do histórico").
+  **3**, 1–10: anos ANTERIORES ao atual analisados no `historicoExercicio`) e `comportamento.esperaAnoSegundos` (padrão
+  **30**, 5–120: espera de cada ano; ver "Análise dos anos do histórico").
 - **Persistência:** tabela `configuracoes(chave PK, valor, atualizado_em)`; só valores diferentes do padrão são gravados
   (restaurar = apagar a linha). `SettingsRepo` em `apps/api/src/db/settings.ts`.
 - **Aplicação:** `POST /api/evaluate*` usa o valor configurado para o que a requisição não informa (`renderer`,
@@ -228,21 +229,25 @@ encontrado com `serigyExecuteWaitSection` no filtro, o avaliador analisa o ano a
 (`comportamento.anosHistorico`, padrão 3: em 2026, 2026, 2025, 2024 e 2023). Cada ano é uma subanálise independente, numa
 página nova (`BrowserLoader.analisarAno` em `evaluator/browser-loader.ts`), em fila com no máximo 3 por vez
 (`ANO_CONCURRENCY` em `evaluate.ts`): abre a página do item, seleciona a opção do ano no filtro, executa o
-`serigyExecuteWaitSection` e espera até 30 s o `serigyLoadSection` mudar (ou a URL mudar). Nunca clica em item de
+`serigyExecuteWaitSection` e espera o `serigyLoadSection` mudar (30 s por padrão, `comportamento.esperaAnoSegundos`) (ou a URL mudar). Nunca clica em item de
 exportação (`salvarRelatorio`).
 
 - **Passou** = a opção existe e a seção mudou (ou, para o ano já selecionado, a seção está presente), com ou sem dados.
-  **Sem dados** = a seção não tem nenhuma linha (`<tr>` com `<td>`, fora de `serigyEmpty`), mesmo com `serigyEmpty`.
+  **Sem dados** = a seção não tem nenhuma linha (`<tr>` com `<td>`, fora de `serigyEmpty`), mesmo com `serigyEmpty`. Sem nenhum
+  `<tr>` (lista de <div>, por exemplo), valem os elementos com `serigyItem` de dados dentro da seção.
 - **Falhou** com os códigos do validador oficial: `INVALID_OPTION` (o ano não existe no select),
   `ERROR_ON_SET_OPTION` (não foi possível abrir a página ou selecionar) e `TABLE_NOT_CHANGED` (a seção não mudou no prazo).
 - Ano que falhou **ou** sem dados deixa o item atendido em **Atenção** (`withHistoricoAnos`, em `packages/shared`; a
-  mensagem lista os anos). O veredito Serigy estimado não muda por causa dos anos. Todo ano analisado mostra as tags
+  mensagem lista os anos). O veredito Serigy estimado muda (`vereditoDosAnos`): **não pontua** quando nenhum ano
+  anterior ao atual passa na troca de ano (código da falha) ou quando nenhum ano tem dados (`TABLE_NOT_CHANGED`); basta um
+  ano anterior passar para pontuar. É uma hipótese calibrada no OP Consórcio. Todo ano analisado mostra as tags
   "Passou" / "Falhou · CÓDIGO" e "Com dados" / "Sem dados" (UI e relatório Markdown).
 - **Stream:** o item sai na hora como antes; cada ano termina em `item-ano` e, ao fim, o item é reenviado com `anos`. O
   `done` só sai depois da fila. Cancelar a avaliação interrompe os anos que ainda não começaram.
 - **Calibração (OP Consórcio, 30/10/2026):** `INVALID_OPTION` (4.1.18, 12.6.10) e `TABLE_NOT_CHANGED` (8.3.6) coincidem
   com o Serigy oficial; tabelas vazias (7.2.5, 9.3.8) aparecem como "sem dados". Ainda diferem do oficial 3.1.9 e 5.1.11
-  (o Serigy reprova, o avaliador passa); por isso o veredito estimado ainda não usa os anos.
+  (o Serigy reprova, o avaliador passa os 4 anos). **Cuidado:** código executado no navegador (`page.evaluate`) só pode
+  usar arrows anônimas; o `tsx` injeta o helper `__name` em funções nomeadas e ele não existe na página.
 
 ## Navegador embutido (renderização de páginas reativas)
 

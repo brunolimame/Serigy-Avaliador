@@ -14,7 +14,7 @@ import type {
   SerigyVeredito,
   StreamEvent,
 } from '@serigy/shared';
-import { DEFAULT_ANOS_HISTORICO, DEFAULT_MAX_PAGES, MAX_EVIDENCE, SERIGY_SCHEMA_QUIRKS, summarize, withHistoricoAnos, withSerigyEstimadoAtencao } from '@serigy/shared';
+import { DEFAULT_ANOS_HISTORICO, DEFAULT_ESPERA_ANO_SEGUNDOS, DEFAULT_MAX_PAGES, MAX_EVIDENCE, SERIGY_SCHEMA_QUIRKS, summarize, withHistoricoAnos, withSerigyEstimadoAtencao } from '@serigy/shared';
 import { getPoder, loadCatalog, pagesForPoder } from '../catalog/load';
 import { describeExpected, validateType } from './checks';
 import { lowerPath, PageStore, urlKey } from './collector';
@@ -481,6 +481,7 @@ export function prepareEvaluation(req: EvaluationRequest, deps: EvaluateDeps = {
   const compat = req.compatibilidadeSerigy ?? true;
   const anosHistorico = Math.min(10, Math.max(1, Math.trunc(req.anosHistorico ?? DEFAULT_ANOS_HISTORICO)));
   // O ano atual e os `anosHistorico` anteriores (3 em 2026: 2026, 2025, 2024 e 2023).
+  const esperaAnoMs = Math.min(120, Math.max(5, Math.trunc(req.esperaAnoSegundos ?? DEFAULT_ESPERA_ANO_SEGUNDOS))) * 1000;
   const anoAtual = now().getFullYear();
   const anosAnalisados = Array.from({ length: anosHistorico + 1 }, (_, i) => String(anoAtual - i));
   const docUrl = (s: CatalogSection) => documentedUrl(portal, s.caminhoUrl);
@@ -576,7 +577,7 @@ export function prepareEvaluation(req: EvaluationRequest, deps: EvaluateDeps = {
           if (signal?.aborted) return;
           let r: HistoricoAno;
           try {
-            r = await analisar({ url: el.pageUrl, ano, waitSection });
+            r = await analisar({ url: el.pageUrl, ano, waitSection, timeoutMs: esperaAnoMs });
           } catch (err) {
             r = { ano, passou: false, codigo: 'ERROR_ON_SET_OPTION', detalhe: `Erro ao selecionar ${ano} em ${el.pageUrl}: ${err instanceof Error ? err.message : String(err)}` };
           }

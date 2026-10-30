@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createServer, type Server } from 'node:http';
-import { DEFAULT_ANOS_HISTORICO, SETTINGS, withHistoricoAnos, type HistoricoAno, type ItemResult, type StreamEvent } from '@serigy/shared';
+import { DEFAULT_ANOS_HISTORICO, DEFAULT_ESPERA_ANO_SEGUNDOS, SETTINGS, vereditoDosAnos, withHistoricoAnos, type HistoricoAno, type ItemResult, type StreamEvent } from '@serigy/shared';
 import { BrowserLoader, shutdownBrowser } from '../src/evaluator/browser-loader';
 import { prepareEvaluation } from '../src/evaluator/evaluate';
 import type { AnoRequest } from '../src/evaluator/loader';
@@ -51,6 +51,61 @@ describe('configuração', () => {
     const def = SETTINGS.find((s) => s.chave === 'comportamento.anosHistorico')!;
     expect(def).toMatchObject({ tipo: 'number', min: 1, max: 10, padrao: DEFAULT_ANOS_HISTORICO });
     expect(DEFAULT_ANOS_HISTORICO).toBe(3);
+  });
+
+  it('segundos esperando a troca de ano: de 5 a 120, padrão 30', () => {
+    const def = SETTINGS.find((s) => s.chave === 'comportamento.esperaAnoSegundos')!;
+    expect(def).toMatchObject({ tipo: 'number', min: 5, max: 120, padrao: DEFAULT_ESPERA_ANO_SEGUNDOS });
+    expect(DEFAULT_ESPERA_ANO_SEGUNDOS).toBe(30);
+  });
+
+  it('repassa o tempo de espera ao carregador (padrão 30 s; o pedido da avaliação prevalece, dentro de 5 a 120 s)', async () => {
+    const padrao = new AnosLoader({ [P]: '<html/>', [D]: HTML });
+    await rodar(padrao);
+    expect(new Set(padrao.pedidos.map((p) => p.timeoutMs))).toEqual(new Set([30_000]));
+
+    const dez = new AnosLoader({ [P]: '<html/>', [D]: HTML });
+    await rodar(dez, { esperaAnoSegundos: 10 });
+    expect(new Set(dez.pedidos.map((p) => p.timeoutMs))).toEqual(new Set([10_000]));
+
+    const limites = new AnosLoader({ [P]: '<html/>', [D]: HTML });
+    await rodar(limites, { esperaAnoSegundos: 999 });
+    expect(limites.pedidos[0]!.timeoutMs).toBe(120_000);
+  });
+});
+
+describe('veredito Serigy estimado a partir dos anos', () => {
+  const ok = (ano: string, comDados = true): HistoricoAno => ({ ano, passou: true, comDados });
+  const falha = (ano: string, codigo: NonNullable<HistoricoAno['codigo']>): HistoricoAno => ({ ano, passou: false, codigo });
+
+  it('basta um ano anterior passar para pontuar, mesmo sem dados nos outros', () => {
+    expect(vereditoDosAnos([ok('2026'), ok('2025', false), falha('2024', 'TABLE_NOT_CHANGED')])).toBeUndefined();
+  });
+
+  it('nenhum ano anterior passou: não pontua, com o código da falha', () => {
+    expect(vereditoDosAnos([ok('2026'), falha('2025', 'INVALID_OPTION'), falha('2024', 'INVALID_OPTION')])).toMatchObject({
+      ponto: false,
+      codigo: 'INVALID_OPTION',
+    });
+  });
+
+  it('nenhum ano com dados: não pontua (TABLE_NOT_CHANGED)', () => {
+    expect(vereditoDosAnos([ok('2026', false), ok('2025', false)])).toMatchObject({ ponto: false, codigo: 'TABLE_NOT_CHANGED' });
+  });
+
+  it('o item vira Atenção e deixa de pontuar quando nenhum ano anterior passa', async () => {
+    const loader = new AnosLoader(
+      { [P]: '<html/>', [D]: HTML },
+      {
+        '2025': { ano: '2025', passou: false, codigo: 'INVALID_OPTION' },
+        '2024': { ano: '2024', passou: false, codigo: 'INVALID_OPTION' },
+        '2023': { ano: '2023', passou: false, codigo: 'INVALID_OPTION' },
+      },
+    );
+    const i = find((await rodar(loader)).result, '4.1.18');
+    expect(i.status).toBe('warning');
+    expect(i.serigy).toMatchObject({ ponto: false, codigo: 'INVALID_OPTION' });
+    expect(i.message).toContain('Atenção: o Serigy estimado não pontua este item (INVALID_OPTION)');
   });
 });
 
@@ -157,6 +212,7 @@ describe('troca de ano no navegador real', () => {
       <select serigyItem="historicoExercicio">
         <option serigyValue="2026" selected>2026</option><option serigyValue="2025">2025</option>
         <option serigyValue="2024">2024</option><option serigyValue="2022">2022</option>
+        <option serigyValue="2021">2021</option><option serigyValue="2020">2020</option>
       </select>
       <button serigyExecuteWaitSection="tab">Pesquisar</button>
     </div>
@@ -169,6 +225,8 @@ describe('troca de ano no navegador real', () => {
         setTimeout(() => {
           if (y === '2025') box.innerHTML = '<table><thead><tr><th>h</th></tr></thead><tbody><tr><td>linha 2025</td></tr></tbody></table>';
           if (y === '2024') box.innerHTML = '<table><thead><tr><th>h</th></tr></thead><tbody></tbody></table>';
+          if (y === '2021') box.innerHTML = '<div serigyItem="valor">lista sem tabela</div>';
+          if (y === '2020') box.innerHTML = '<table><tbody><tr serigyEmpty="Sem registros"><td>nenhum</td></tr></tbody></table>';
           // 2022: o portal não reage (a seção não muda)
         }, 150);
       });
@@ -211,6 +269,12 @@ describe('troca de ano no navegador real', () => {
         expect(a2023).toMatchObject({ passou: false, codigo: 'INVALID_OPTION' });
         expect(a2022).toMatchObject({ passou: false, codigo: 'TABLE_NOT_CHANGED' });
         expect(a2022!.detalhe).toContain('1500ms');
+        // sem <tr>: valem os serigyItem de dados da seção; linha só com serigyEmpty não é dado
+        expect(await analisar('2021')).toMatchObject({ passou: true, comDados: true });
+        expect(await analisar('2020')).toMatchObject({ passou: true, comDados: false });
+        // o tempo do pedido prevalece sobre o do carregador
+        const curto = await loader.analisarAno({ url: base, ano: '2022', waitSection: 'tab', timeoutMs: 600 });
+        expect(curto.detalhe).toContain('600ms');
         expect(clicks).not.toContain('/clicked/exp'); // nunca clica em item de exportação
       } finally {
         await loader.close();
