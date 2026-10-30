@@ -318,7 +318,7 @@ function SerigyLine({ item, oficial }: { item: ItemResult; oficial?: SerigyOfici
   return (
     <div className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
       <span>Serigy:</span>
-      {oficial && <SerigyChip ponto={oficial.ponto} codigo={off?.codigo} label="oficial" />}
+      {oficial && <SerigyChip ponto={oficial.ponto} codigo={off?.codigos?.join(', ')} label="oficial" />}
       {item.serigy && <SerigyChip ponto={item.serigy.ponto} codigo={item.serigy.codigo} label="estimado" />}
       {diverge && (
         <Badge variant="outline" className="border-amber-300 bg-amber-100 text-amber-900 dark:border-amber-800 dark:bg-amber-900/50 dark:text-amber-200">

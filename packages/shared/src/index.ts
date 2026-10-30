@@ -202,7 +202,10 @@ export type SerigyCodigo =
   | 'SCHEMA_NOT_FOUND'
   | 'SERIGYITEM_NOT_FOUND'
   | 'SERIGYITEM_NOT_VALID'
-  | 'WAITSECTION_NOT_FOUND';
+  | 'WAITSECTION_NOT_FOUND'
+  | 'INVALID_OPTION'
+  | 'ERROR_ON_SET_OPTION'
+  | 'TABLE_NOT_CHANGED';
 
 export const SERIGY_CODIGOS: SerigyCodigo[] = [
   'URL_NOT_ACCESSIBLE',
@@ -210,6 +213,9 @@ export const SERIGY_CODIGOS: SerigyCodigo[] = [
   'SERIGYITEM_NOT_FOUND',
   'SERIGYITEM_NOT_VALID',
   'WAITSECTION_NOT_FOUND',
+  'INVALID_OPTION',
+  'ERROR_ON_SET_OPTION',
+  'TABLE_NOT_CHANGED',
 ];
 
 /**
@@ -656,11 +662,18 @@ export interface SerigyOficial {
   itens: SerigyOficialItem[];
 }
 
-/** Separa o código do erro oficial (`CODIGO|mensagem`) da mensagem. */
-export function parseSerigyDetalhe(detalhe: string | null): { codigo?: string; mensagem?: string } {
+/**
+ * Separa os códigos do erro oficial (`CODIGO|mensagem`) da mensagem. Um item pode trazer vários erros emendados, um por
+ * ano tentado na troca do `historicoExercicio` (ex.: `TABLE_NOT_CHANGED|…ERROR_ON_SET_OPTION|…`): `codigo` é o primeiro
+ * e `codigos` lista todos, sem repetir.
+ */
+export function parseSerigyDetalhe(detalhe: string | null): { codigo?: string; codigos?: string[]; mensagem?: string } {
   if (!detalhe) return {};
   const i = detalhe.indexOf('|');
-  return i < 0 ? { mensagem: detalhe } : { codigo: detalhe.slice(0, i), mensagem: detalhe.slice(i + 1) };
+  if (i < 0) return { mensagem: detalhe };
+  const todos = [...detalhe.matchAll(/([A-Z][A-Z0-9]*(?:_[A-Z0-9]+)+)\|/g)].map((m) => m[1]!);
+  const codigo = detalhe.slice(0, i);
+  return { codigo, codigos: todos.length ? [...new Set(todos)] : [codigo], mensagem: detalhe.slice(i + 1) };
 }
 
 /** Identificação do arquivo de exportação. */

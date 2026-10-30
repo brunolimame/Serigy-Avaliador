@@ -1,6 +1,6 @@
 import type { Server } from 'node:http';
 import { afterEach, beforeAll, describe, expect, it } from 'vitest';
-import { evaluationDuration, formatDuration, serigySummarize, type EvaluationResult, type SerigyOficialItem } from '@serigy/shared';
+import { evaluationDuration, formatDuration, parseSerigyDetalhe, SERIGY_CODIGOS, serigySummarize, type EvaluationResult, type SerigyOficialItem } from '@serigy/shared';
 import { createApp } from '../src/app';
 import { AvaliacoesRepo, PortaisRepo, SettingsRepo } from '../src/db';
 import { openDatabase } from '../src/db/database';
@@ -273,6 +273,19 @@ describe('API do Serigy oficial', () => {
     expect((await put(`${base}/api/avaliacoes/9999/serigy`, [])).status).toBe(400);
     const itens = [{ dimensao: 'D', itemId: '4.1.1', serigyItem: 'a', serigySchema: SCHEMA, ponto: true, detalhe: null }];
     expect((await put(`${base}/api/avaliacoes/9999/serigy`, itens)).status).toBe(404);
+  });
+});
+
+describe('códigos do Serigy oficial na troca de ano', () => {
+  it('lê todos os códigos emendados no detalhe, sem repetir', () => {
+    const d = 'TABLE_NOT_CHANGED|O valor 2025 não alterou [serigyLoadSection="x"]: Waiting failed: 30000ms exceededERROR_ON_SET_OPTION|Erro ao selecionar 2025 em https://a.b/cTABLE_NOT_CHANGED|O valor 2024 não alterou…Múltiplas falhas ao selecionar anos';
+    expect(parseSerigyDetalhe(d).codigos).toEqual(['TABLE_NOT_CHANGED', 'ERROR_ON_SET_OPTION']);
+    expect(parseSerigyDetalhe('INVALID_OPTION|2025 é uma opção inválida')).toMatchObject({ codigo: 'INVALID_OPTION', codigos: ['INVALID_OPTION'] });
+    expect(parseSerigyDetalhe(null)).toEqual({});
+  });
+
+  it('a lista de códigos aceitos inclui os da troca de ano', () => {
+    for (const c of ['INVALID_OPTION', 'ERROR_ON_SET_OPTION', 'TABLE_NOT_CHANGED']) expect(SERIGY_CODIGOS).toContain(c);
   });
 });
 

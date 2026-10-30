@@ -186,7 +186,7 @@ linhas (fuso America/Maceio). Código: `formatDuration`/`evaluationDuration` em 
 O `status` do avaliador (`ok`, `warning`, `empty`, `missing`) e todos os detalhes seguem a matriz. Ao lado dele, cada
 item traz `serigy: { ponto, codigo?, detalhe? }` — o veredito **estimado** de como o validador oficial do TCE-SE
 pontuaria o item (`ponto` = pontua ou não; `codigo` = `URL_NOT_ACCESSIBLE`, `SCHEMA_NOT_FOUND`, `SERIGYITEM_NOT_FOUND`,
-`SERIGYITEM_NOT_VALID` ou `WAITSECTION_NOT_FOUND`). Código: `veredito()` em `evaluator/evaluate.ts`. Regras:
+`SERIGYITEM_NOT_VALID` ou `WAITSECTION_NOT_FOUND`). O oficial usa ainda `INVALID_OPTION`, `ERROR_ON_SET_OPTION` e `TABLE_NOT_CHANGED`, emitidos só no `historicoExercicio` quando ele troca o ano do filtro (seleciona a opção, executa o `serigyExecuteWaitSection` e espera o `serigyLoadSection` mudar, até 30 s); o avaliador não executa essa troca e por isso não os estima, apenas os exibe no oficial anexado (um item pode trazer vários, um por ano tentado, e pontuar mesmo assim). Código: `veredito()` em `evaluator/evaluate.ts`. Regras:
 
 - `ok` e `empty` pontuam; `missing` não (código conforme a causa: página/iframe inacessível, schema ou item ausente).
 - `warning` por **valor fora do tipo** ou **só `<th>`** pontua (o validador oficial não reprova por isso); `warning` por

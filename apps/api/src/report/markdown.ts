@@ -111,8 +111,8 @@ function serigyCell(i: ItemResult, oficial?: Record<string, SerigyOficialItem>):
   if (i.serigy) parts.push(`estimado: ${i.serigy.ponto ? '✅' : '❌'}${i.serigy.codigo ? ' ' + code(i.serigy.codigo) : ''}`);
   const o = oficial?.[i.id];
   if (o) {
-    const { codigo } = parseSerigyDetalhe(o.detalhe);
-    parts.push(`oficial: ${o.ponto ? '✅' : '❌'}${codigo ? ' ' + code(codigo) : ''}`);
+    const { codigos } = parseSerigyDetalhe(o.detalhe);
+    parts.push(`oficial: ${o.ponto ? '✅' : '❌'}${codigos?.length ? ' ' + codigos.map(code).join(' ') : ''}`);
   }
   return parts.length ? parts.join('<br>') : '—';
 }
