@@ -145,6 +145,11 @@ export interface EvaluationRequest {
    * documentação (ver `SERIGY_SCHEMA_QUIRKS`). Padrão: configuração `comportamento.compatibilidadeSerigy`.
    */
   compatibilidadeSerigy?: boolean;
+  /**
+   * Quantos anos ANTERIORES ao atual são analisados no `historicoExercicio` (de 1 a 10; o ano atual sempre entra:
+   * 3 = 2026, 2025, 2024 e 2023). Padrão: configuração `comportamento.anosHistorico`.
+   */
+  anosHistorico?: number;
 }
 
 export type Renderer = 'browser' | 'http';
@@ -241,6 +246,23 @@ export const SERIGY_SCHEMA_QUIRKS: Array<{ documentado: string; serigyEspera: st
   },
 ];
 
+/** Códigos de falha da troca de ano do `historicoExercicio` (os mesmos do validador oficial). */
+export type HistoricoAnoCodigo = Extract<SerigyCodigo, 'INVALID_OPTION' | 'ERROR_ON_SET_OPTION' | 'TABLE_NOT_CHANGED'>;
+
+/**
+ * Resultado da análise de UM ano do `historicoExercicio`: o avaliador seleciona o ano no filtro, executa o
+ * `serigyExecuteWaitSection` e espera o `serigyLoadSection` mudar.
+ */
+export interface HistoricoAno {
+  ano: string;
+  /** A troca de ano funcionou (a opção existe e a seção mudou), com ou sem dados. */
+  passou: boolean;
+  /** Há ao menos uma linha de dados (`<tr>` com `<td>`, fora do serigyEmpty). Indefinido quando não passou. */
+  comDados?: boolean;
+  codigo?: HistoricoAnoCodigo;
+  detalhe?: string;
+}
+
 export interface ItemResult {
   id: string;
   sectionId: string;
@@ -274,6 +296,8 @@ export interface ItemResult {
   evidence: Array<{ pageUrl: string; snippet: string }>;
   /** Veredito estimado do validador oficial do Serigy; ausente em avaliações antigas do histórico. */
   serigy?: SerigyVeredito;
+  /** Só no `historicoExercicio`: a análise de cada ano (troca do ano no filtro). Ausente sem navegador ou em avaliações antigas. */
+  anos?: HistoricoAno[];
 }
 
 /**
@@ -377,7 +401,7 @@ export interface EvaluationResult {
   /** Avisos gerais (ex.: conteúdo dinâmico não renderizado). */
   warnings: string[];
   /** Parâmetros de rastreio usados (reaproveitados ao reavaliar um item). */
-  crawl: { maxPages: number; tryDocumentedCase: boolean; renderer: Renderer };
+  crawl: { maxPages: number; tryDocumentedCase: boolean; renderer: Renderer; anosHistorico?: number };
   summary: Summary;
   pages: PageResult[];
 }
@@ -414,6 +438,27 @@ export function withSerigyEstimadoAtencao(item: ItemResult): ItemResult {
   if (item.status !== 'ok' || !item.serigy || item.serigy.ponto) return item;
   const nota = serigyAtencao('estimado', item.serigy.codigo);
   return { ...item, status: 'warning', message: item.message ? `${item.message}; ${nota}` : nota };
+}
+
+/** Anos do histórico que merecem atenção: a troca falhou ou o ano não tem nenhuma linha de dados. */
+export function anosComProblema(anos: HistoricoAno[]): HistoricoAno[] {
+  return anos.filter((a) => !a.passou || a.comDados === false);
+}
+
+/** Texto curto do problema de um ano ("2025 sem dados", "2024 falhou (TABLE_NOT_CHANGED)"). */
+export function descreverAnoProblema(a: HistoricoAno): string {
+  return a.passou ? `${a.ano} sem dados` : `${a.ano} falhou${a.codigo ? ` (${a.codigo})` : ''}`;
+}
+
+/**
+ * Anexa a análise dos anos ao item do `historicoExercicio`. Algum ano que falhou ou sem dados deixa o item atendido em
+ * "Atenção" (o veredito Serigy estimado não muda); os demais status ficam como estão.
+ */
+export function withHistoricoAnos(item: ItemResult, anos: HistoricoAno[]): ItemResult {
+  const problemas = anosComProblema(anos);
+  if (problemas.length === 0 || (item.status !== 'ok' && item.status !== 'empty')) return { ...item, anos };
+  const nota = `Atenção: ${problemas.map(descreverAnoProblema).join('; ')}`;
+  return { ...item, anos, status: 'warning', message: item.message ? `${item.message}; ${nota}` : nota };
 }
 
 /** Resume uma lista de itens. `score` = (ok + empty) / total, de 0 a 100. */
@@ -466,7 +511,7 @@ export interface EvaluationPlan {
   poderLabel: string;
   startedAt: string;
   scope: { mode: 'todos' | 'parcial'; pages: number; items: number };
-  crawl: { maxPages: number; tryDocumentedCase: boolean; renderer: Renderer };
+  crawl: { maxPages: number; tryDocumentedCase: boolean; renderer: Renderer; anosHistorico?: number };
   pages: PlanPage[];
 }
 
@@ -476,7 +521,8 @@ export interface EvaluationPlan {
  *  fetched       – uma página foi baixada (ou falhou)
  *  invoker       – resultado da verificação do Invoker
  *  section-start – a análise de uma seção começou (seus itens passam a "analisando")
- *  item          – um item foi concluído
+ *  item          – um item foi concluído (o `historicoExercicio` é enviado de novo, com `anos`, ao fim da análise dos anos)
+ *  item-ano      – um ano do `historicoExercicio` terminou (`total` = quantos anos o item analisa)
  *  done          – resultado final completo (último evento)
  *  error         – a avaliação falhou
  */
@@ -486,6 +532,7 @@ export type StreamEvent =
   | { type: 'invoker'; invoker: InvokerCheck }
   | { type: 'section-start'; pageId: string; sectionId: string }
   | { type: 'item'; pageId: string; sectionId: string; item: ItemResult }
+  | { type: 'item-ano'; itemId: string; ano: HistoricoAno; total: number }
   | { type: 'done'; result: EvaluationResult }
   | { type: 'error'; message: string; status: number };
 
@@ -530,6 +577,9 @@ export function groupPagesByNumber<P extends { number: string; title: string; se
 
 /** Padrão do máximo de páginas seguidas por serigyLink (total por avaliação, somando todas as cadeias). */
 export const DEFAULT_MAX_PAGES = 40;
+
+/** Padrão de anos anteriores ao atual analisados no `historicoExercicio`. */
+export const DEFAULT_ANOS_HISTORICO = 3;
 
 export type SettingValue = boolean | number;
 
@@ -590,6 +640,17 @@ export const SETTINGS: SettingDef[] = [
     rotulo: 'Testar também a grafia da documentação (com maiúsculas)',
     descricao:
       'Os caminhos (ex.: /Despesas) são testados sempre em minúsculas (/despesas). Com esta opção, se a minúscula falhar (404 ou outro erro), a grafia da documentação também é testada.',
+  },
+  {
+    chave: 'comportamento.anosHistorico',
+    categoria: 'comportamento',
+    tipo: 'number',
+    padrao: DEFAULT_ANOS_HISTORICO,
+    min: 1,
+    max: 10,
+    rotulo: 'Anos anteriores analisados no histórico',
+    descricao:
+      'Quantos anos ANTES do atual são analisados no histórico (historicoExercicio), além do atual: com 3, em 2026 são 2026, 2025, 2024 e 2023. Cada ano seleciona a opção no filtro, executa o serigyExecuteWaitSection e espera a seção mudar (só com o navegador). Ano que falha ou que não tem nenhuma linha de dados deixa o item em Atenção.',
   },
   {
     chave: 'comportamento.compatibilidadeSerigy',
@@ -679,7 +740,7 @@ export function parseSerigyDetalhe(detalhe: string | null): { codigo?: string; c
 /** Identificação do arquivo de exportação. */
 export const EXPORT_FORMAT = 'serigy-avaliacao';
 /** Versão do formato. Aumente ao mudar a estrutura de `resultado` (importadores antigos recusam versões maiores). */
-export const EXPORT_VERSION = 2;
+export const EXPORT_VERSION = 3;
 
 /**
  * Arquivo JSON de uma avaliação, para guardar ou enviar a outra pessoa. O `hash` (SHA-256 do `resultado`

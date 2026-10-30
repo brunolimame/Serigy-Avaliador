@@ -138,7 +138,8 @@ Janela estilo VS Code (botão "Configurações" ou **Ctrl+,** / **Cmd+,**; Esc f
 - **Catálogo:** `SETTINGS` em `packages/shared/src/index.ts` (chave `<categoria>.<nome>`, tipo, padrão, faixa). Para criar
   uma configuração, acrescente uma entrada: a API valida pelo tipo/faixa e o painel desenha o controle sozinho.
 - **Configurações atuais:** `comportamento.navegador` (padrão ligado), `comportamento.maxPaginasSerigyLink` (padrão
-  **40**, 1–200) e `comportamento.testarGrafiaDocumentacao` (padrão desligado).
+  **40**, 1–200), `comportamento.testarGrafiaDocumentacao` (padrão desligado) e `comportamento.anosHistorico` (padrão
+  **3**, 1–10: anos ANTERIORES ao atual analisados no `historicoExercicio`; ver "Análise dos anos do histórico").
 - **Persistência:** tabela `configuracoes(chave PK, valor, atualizado_em)`; só valores diferentes do padrão são gravados
   (restaurar = apagar a linha). `SettingsRepo` em `apps/api/src/db/settings.ts`.
 - **Aplicação:** `POST /api/evaluate*` usa o valor configurado para o que a requisição não informa (`renderer`,
@@ -160,8 +161,8 @@ todo o histórico (Configurações › Histórico, com confirmação).
 - **Abrir:** a avaliação aberta do histórico mostra data/hora e todos os detalhes, mas é **somente leitura** (sem
   Reavaliar item/grupo). Para reavaliar, faz-se uma nova avaliação.
 - **Exportar:** JSON importável (envelope abaixo) e relatório Markdown (o mesmo de `/api/report`).
-- **Envelope JSON** (`formato: "serigy-avaliacao"`, `versao: 2`): `exportadoEm`, `app {nome, versao}`,
-  `catalogo {geradoEm}`, `hash`, `resultado` e, se houver, `serigyOficial` (fora do hash; ver "Veredito Serigy"). A versão 1 continua importável. Mudança incompatível = nova `versao` (EXPORT_VERSION no shared); arquivos de
+- **Envelope JSON** (`formato: "serigy-avaliacao"`, `versao: 3`): `exportadoEm`, `app {nome, versao}`,
+  `catalogo {geradoEm}`, `hash`, `resultado` e, se houver, `serigyOficial` (fora do hash; ver "Veredito Serigy"). As versões 1 e 2 continuam importáveis (`anos` e `crawl.anosHistorico` são opcionais). Mudança incompatível = nova `versao` (EXPORT_VERSION no shared); arquivos de
   versão mais nova são recusados.
 - **Importar (somente JSON):** a API valida, nesta ordem, (1) estrutura do envelope sem chaves desconhecidas, (2) formato,
   (3) versão, (4) o resultado inteiro com **zod estrito** (tipos, enums, limites de tamanho, URLs http(s), ids de item) e
@@ -219,6 +220,29 @@ Serigy omite alguns itens e a numeração se desloca (ex.: Receitas). Ao abrir a
 oficial junto do estimado (com aviso quando divergem), e o resumo ganha "Serigy oficial". A lista mostra o percentual do
 Serigy ou "Sem Serigy", com botões para baixar (mesmo formato do Serigy), substituir e remover. O JSON exportado
 (`versao: 2`) e o relatório Markdown incluem o Serigy anexado.
+
+## Análise dos anos do histórico
+
+Só com o navegador (`renderer: "browser"`; no modo HTTP a análise é ignorada, com aviso). Para cada `historicoExercicio` já
+encontrado com `serigyExecuteWaitSection` no filtro, o avaliador analisa o ano atual e os N anteriores
+(`comportamento.anosHistorico`, padrão 3: em 2026, 2026, 2025, 2024 e 2023). Cada ano é uma subanálise independente, numa
+página nova (`BrowserLoader.analisarAno` em `evaluator/browser-loader.ts`), em fila com no máximo 3 por vez
+(`ANO_CONCURRENCY` em `evaluate.ts`): abre a página do item, seleciona a opção do ano no filtro, executa o
+`serigyExecuteWaitSection` e espera até 30 s o `serigyLoadSection` mudar (ou a URL mudar). Nunca clica em item de
+exportação (`salvarRelatorio`).
+
+- **Passou** = a opção existe e a seção mudou (ou, para o ano já selecionado, a seção está presente), com ou sem dados.
+  **Sem dados** = a seção não tem nenhuma linha (`<tr>` com `<td>`, fora de `serigyEmpty`), mesmo com `serigyEmpty`.
+- **Falhou** com os códigos do validador oficial: `INVALID_OPTION` (o ano não existe no select),
+  `ERROR_ON_SET_OPTION` (não foi possível abrir a página ou selecionar) e `TABLE_NOT_CHANGED` (a seção não mudou no prazo).
+- Ano que falhou **ou** sem dados deixa o item atendido em **Atenção** (`withHistoricoAnos`, em `packages/shared`; a
+  mensagem lista os anos). O veredito Serigy estimado não muda por causa dos anos. Todo ano analisado mostra as tags
+  "Passou" / "Falhou · CÓDIGO" e "Com dados" / "Sem dados" (UI e relatório Markdown).
+- **Stream:** o item sai na hora como antes; cada ano termina em `item-ano` e, ao fim, o item é reenviado com `anos`. O
+  `done` só sai depois da fila. Cancelar a avaliação interrompe os anos que ainda não começaram.
+- **Calibração (OP Consórcio, 30/10/2026):** `INVALID_OPTION` (4.1.18, 12.6.10) e `TABLE_NOT_CHANGED` (8.3.6) coincidem
+  com o Serigy oficial; tabelas vazias (7.2.5, 9.3.8) aparecem como "sem dados". Ainda diferem do oficial 3.1.9 e 5.1.11
+  (o Serigy reprova, o avaliador passa); por isso o veredito estimado ainda não usa os anos.
 
 ## Navegador embutido (renderização de páginas reativas)
 
@@ -454,6 +478,7 @@ conforme a análise avança. É o que a UI usa para mostrar o andamento de cada 
 | `invoker` | depois de baixar a URL inicial | `invoker` |
 | `section-start` | uma seção começou a ser analisada | `pageId`, `sectionId` (seus itens passam a "Analisando…") |
 | `item` | um item foi concluído | `pageId`, `sectionId`, `item` (o `ItemResult` completo, igual ao do resultado final) |
+| `item-ano` | um ano do `historicoExercicio` terminou | `itemId`, `ano` (`HistoricoAno`), `total` (anos que o item analisa). O item é reenviado (`item`) com `anos` ao fim |
 | `done` | último evento | `result`: o `EvaluationResult` final (ordenado, com avisos e resumos) |
 | `error` | a análise falhou (ex.: portal inacessível, `status` 502) | `message`, `status` |
 

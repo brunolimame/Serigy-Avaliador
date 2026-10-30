@@ -6,6 +6,7 @@ import type {
   EvaluationPlan,
   EvaluationRequest,
   EvaluationResult,
+  HistoricoAno,
   InvokerCheck,
   ItemResult,
   PageResult,
@@ -13,7 +14,7 @@ import type {
   SerigyVeredito,
   StreamEvent,
 } from '@serigy/shared';
-import { DEFAULT_MAX_PAGES, MAX_EVIDENCE, SERIGY_SCHEMA_QUIRKS, summarize, withSerigyEstimadoAtencao } from '@serigy/shared';
+import { DEFAULT_ANOS_HISTORICO, DEFAULT_MAX_PAGES, MAX_EVIDENCE, SERIGY_SCHEMA_QUIRKS, summarize, withHistoricoAnos, withSerigyEstimadoAtencao } from '@serigy/shared';
 import { getPoder, loadCatalog, pagesForPoder } from '../catalog/load';
 import { describeExpected, validateType } from './checks';
 import { lowerPath, PageStore, urlKey } from './collector';
@@ -389,6 +390,28 @@ function checkInvoker(start: PageMarkup | undefined): InvokerCheck {
 /** Quantas seções são analisadas ao mesmo tempo. */
 const SECTION_CONCURRENCY = 3;
 
+/** Quantos anos do historicoExercicio são analisados ao mesmo tempo (cada um abre uma página no navegador). */
+const ANO_CONCURRENCY = 3;
+
+/** Limita quantas tarefas assíncronas rodam juntas; as demais esperam na fila, na ordem em que chegaram. */
+class Limiter {
+  private active = 0;
+  private readonly waiting: Array<() => void> = [];
+  constructor(private readonly size: number) {}
+
+  async run<T>(task: () => Promise<T>): Promise<T> {
+    if (this.active >= this.size) await new Promise<void>((resolve) => this.waiting.push(resolve));
+    else this.active += 1;
+    try {
+      return await task();
+    } finally {
+      const next = this.waiting.shift();
+      if (next) next(); // a vaga passa direto para a próxima tarefa
+      else this.active -= 1;
+    }
+  }
+}
+
 async function pool<T>(tasks: T[], size: number, worker: (task: T) => Promise<void>): Promise<void> {
   let next = 0;
   const lanes = Array.from({ length: Math.min(size, tasks.length) }, async () => {
@@ -456,6 +479,10 @@ export function prepareEvaluation(req: EvaluationRequest, deps: EvaluateDeps = {
   const maxPages = Math.min(req.maxPages ?? DEFAULT_MAX_PAGES, 200);
   const tryDocumentedCase = req.tryDocumentedCase ?? false;
   const compat = req.compatibilidadeSerigy ?? true;
+  const anosHistorico = Math.min(10, Math.max(1, Math.trunc(req.anosHistorico ?? DEFAULT_ANOS_HISTORICO)));
+  // O ano atual e os `anosHistorico` anteriores (3 em 2026: 2026, 2025, 2024 e 2023).
+  const anoAtual = now().getFullYear();
+  const anosAnalisados = Array.from({ length: anosHistorico + 1 }, (_, i) => String(anoAtual - i));
   const docUrl = (s: CatalogSection) => documentedUrl(portal, s.caminhoUrl);
   const itemCount = selected.reduce((n, p) => n + p.sections.reduce((m, s) => m + s.items.length, 0), 0);
   const totalCatalogItems = available.reduce((n, p) => n + p.sections.reduce((m, s) => m + s.items.length, 0), 0);
@@ -468,7 +495,7 @@ export function prepareEvaluation(req: EvaluationRequest, deps: EvaluateDeps = {
     poderLabel: poder.label,
     startedAt,
     scope: { mode: itemCount === totalCatalogItems ? 'todos' : 'parcial', pages: selected.length, items: itemCount },
-    crawl: { maxPages, tryDocumentedCase, renderer },
+    crawl: { maxPages, tryDocumentedCase, renderer, anosHistorico },
     pages: selected.map(({ page, sections }) => ({
       id: page.id,
       number: page.number,
@@ -525,6 +552,47 @@ export function prepareEvaluation(req: EvaluationRequest, deps: EvaluateDeps = {
 
     // 2. Seção a seção: baixa a página do caminho, segue serigyLink necessários e avalia os itens.
     const done = new Map<string, ItemResult>();
+    const anoLimiter = new Limiter(ANO_CONCURRENCY);
+    const anoJobs: Array<Promise<void>> = [];
+    let anosIgnorados = false;
+
+    // historicoExercicio: cada ano vira uma subanálise em fila; o item já foi enviado e é reenviado, com `anos`, ao fim.
+    const analisarAnos = (item: CatalogItem, result: ItemResult, pageId: string, sectionId: string) => {
+      if (item.atributo !== HISTORICO_ATTR || result.status === 'missing') return;
+      const el = store.elements.find(
+        (e) => e.item === HISTORICO_ATTR && e.waitSection && result.analyzedUrls.some((u) => urlKey(u) === urlKey(e.pageUrl)),
+      );
+      if (!el?.waitSection) return;
+      const { loader } = created;
+      if (!loader.analisarAno) {
+        anosIgnorados = true;
+        return;
+      }
+      const analisar = loader.analisarAno.bind(loader);
+      const waitSection = el.waitSection;
+      const resultados: HistoricoAno[] = [];
+      const tarefas = anosAnalisados.map((ano, i) =>
+        anoLimiter.run(async () => {
+          if (signal?.aborted) return;
+          let r: HistoricoAno;
+          try {
+            r = await analisar({ url: el.pageUrl, ano, waitSection });
+          } catch (err) {
+            r = { ano, passou: false, codigo: 'ERROR_ON_SET_OPTION', detalhe: `Erro ao selecionar ${ano} em ${el.pageUrl}: ${err instanceof Error ? err.message : String(err)}` };
+          }
+          resultados[i] = r;
+          emit({ type: 'item-ano', itemId: item.id, ano: r, total: anosAnalisados.length });
+        }),
+      );
+      anoJobs.push(
+        Promise.all(tarefas).then(() => {
+          if (signal?.aborted) return;
+          const final = withHistoricoAnos(result, resultados);
+          done.set(item.id, final);
+          emit({ type: 'item', pageId, sectionId, item: final });
+        }),
+      );
+    };
     const tasks = selected.flatMap(({ page, sections }) => sections.map(({ section, items }) => ({ page, section, items })));
     await pool(tasks, SECTION_CONCURRENCY, async ({ page, section, items }) => {
       if (signal?.aborted) return;
@@ -542,8 +610,10 @@ export function prepareEvaluation(req: EvaluationRequest, deps: EvaluateDeps = {
         const result = evaluateItem(item, section.id, page, scope, store, compat);
         done.set(item.id, result);
         emit({ type: 'item', pageId: page.id, sectionId: section.id, item: result });
+        analisarAnos(item, result, page.id, section.id);
       }
     });
+    await Promise.all(anoJobs);
     if (signal?.aborted) throw new EvaluationError('Avaliação cancelada', 499);
 
     // 3. Avisos e resultado final, na ordem do plano.
@@ -562,6 +632,9 @@ export function prepareEvaluation(req: EvaluationRequest, deps: EvaluateDeps = {
           : 'Algumas páginas usam serigyExecuteWaitSection (conteúdo carregado após clique). O download simples do HTML não executa JavaScript; ' +
               'itens exibidos só após a interação podem aparecer como "missing". Use o navegador (renderer "browser").',
       );
+    }
+    if (anosIgnorados) {
+      warnings.push('A análise dos anos do histórico (historicoExercicio) exige o navegador (renderer "browser"); foi ignorada.');
     }
     if (store.elements.length === 0) warnings.push('Nenhum elemento com serigyItem foi encontrado nas páginas analisadas.');
 

@@ -3,6 +3,7 @@ import {
   type EvaluationPlan,
   type EvaluationResult,
   type FetchedPage,
+  type HistoricoAno,
   type InvokerCheck,
   type ItemResult,
   type PageResult,
@@ -19,6 +20,8 @@ export interface Live {
   plan: EvaluationPlan;
   status: LiveStatus;
   items: Record<string, ItemResult>;
+  /** Anos do historicoExercicio já analisados (parcial, até o item final chegar com `anos`). */
+  anos: Record<string, Array<HistoricoAno | undefined>>;
   /** Itens cuja seção está sendo analisada agora. */
   running: string[];
   fetched: FetchedPage[];
@@ -26,7 +29,7 @@ export interface Live {
 }
 
 export function startLive(plan: EvaluationPlan): Live {
-  return { plan, status: 'running', items: {}, running: [], fetched: [] };
+  return { plan, status: 'running', items: {}, anos: {}, running: [], fetched: [] };
 }
 
 /** Aplica um evento ao estado (função pura). `plan` e `done` são tratados por quem chama. */
@@ -39,6 +42,9 @@ export function applyEvent(live: Live, event: StreamEvent): Live {
     }
     case 'item':
       return { ...live, items: { ...live.items, [event.item.id]: event.item }, running: live.running.filter((id) => id !== event.item.id) };
+    case 'item-ano': {
+      return { ...live, anos: { ...live.anos, [event.itemId]: [...(live.anos[event.itemId] ?? []), event.ano] } };
+    }
     case 'fetched':
       return { ...live, fetched: [...live.fetched, event.page] };
     case 'invoker':
@@ -47,6 +53,10 @@ export function applyEvent(live: Live, event: StreamEvent): Live {
       return live;
   }
 }
+
+/** Do ano mais recente para o mais antigo (a ordem de chegada depende da fila). */
+const sortAnos = (anos: Array<HistoricoAno | undefined>): HistoricoAno[] =>
+  anos.filter((a): a is HistoricoAno => Boolean(a)).sort((a, b) => Number(b.ano) - Number(a.ano));
 
 export interface LiveView {
   /** Resultado parcial: itens pendentes são só marcadores e ficam fora dos resumos. */
@@ -70,7 +80,7 @@ export function buildView(live: Live): LiveView {
       notes: s.notes,
       items: s.items.map((i): ItemResult => {
         const done = live.items[i.id];
-        if (done) return done;
+        if (done) return done.anos || !live.anos[i.id] ? done : { ...done, anos: sortAnos(live.anos[i.id]!) };
         pending.set(i.id, frozen ? 'skipped' : running.has(i.id) ? 'running' : 'waiting');
         // Marcador: não entra em nenhum resumo (ver `finished` abaixo).
         return { ...i, sectionId: s.id, status: 'missing', message: '', expected: '', schema: { esperado: p.schemaUrl, confere: false }, analyzedUrls: [], evidence: [] };

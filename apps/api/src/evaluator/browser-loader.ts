@@ -3,7 +3,8 @@ import { existsSync, readdirSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { chromium, type Browser, type BrowserContext, type Page } from 'playwright-core';
-import type { LoadedPage, PageLoader } from './loader';
+import type { HistoricoAno } from '@serigy/shared';
+import type { AnoRequest, LoadedPage, PageLoader } from './loader';
 
 /**
  * Carregador que abre a página em um navegador real (Chrome/Edge em modo headless), executa o
@@ -30,6 +31,8 @@ export interface BrowserLoaderOptions {
   executeWaitSections?: boolean;
   /** Máximo de cliques de serigyExecuteWaitSection por página. */
   maxWaitSections?: number;
+  /** Tempo máximo esperando a seção mudar depois de trocar o ano (o validador oficial espera 30 s). */
+  anoTimeoutMs?: number;
   userAgent?: string;
 }
 
@@ -49,6 +52,12 @@ export function browserSource(): typeof launchedFrom {
 const IDLE_CLOSE_MS = 60_000;
 
 const LF = String.fromCharCode(10);
+
+/** Primeira linha da mensagem de um erro (as do Playwright trazem o registro de chamadas nas demais). */
+const primeiraLinha = (err: unknown): string => {
+  const message = err instanceof Error ? err.message : String(err);
+  return message.split(LF)[0] ?? message;
+};
 
 /**
  * Navegador extraído de chrome-headless-shell-*.zip para apps/api/.browser (scripts/install-browser.mjs).
@@ -181,6 +190,7 @@ export class BrowserLoader implements PageLoader {
         settleMs: options.settleMs ?? 8_000,
         executeWaitSections: options.executeWaitSections ?? true,
         maxWaitSections: options.maxWaitSections ?? 20,
+        anoTimeoutMs: options.anoTimeoutMs ?? 30_000,
       });
     } catch (err) {
       release();
@@ -247,6 +257,103 @@ export class BrowserLoader implements PageLoader {
         return { url: finalUrl, status, html: null, error: `desafio anti-robô detectado ("${title}"); libere o avaliador no portal` };
       }
       return { url: finalUrl, status, html };
+    } finally {
+      await page.close().catch(() => undefined);
+    }
+  }
+
+  /**
+   * Analisa UM ano do historicoExercicio numa página nova (cada ano é independente e pode rodar em paralelo): abre a
+   * página, escolhe a opção do ano no filtro, executa o serigyExecuteWaitSection e espera o serigyLoadSection mudar.
+   *  - opção inexistente                          -> INVALID_OPTION
+   *  - não foi possível abrir a página/selecionar -> ERROR_ON_SET_OPTION
+   *  - a seção não mudou no prazo                 -> TABLE_NOT_CHANGED
+   *  - mudou: "sem dados" quando não há nenhuma linha (<tr> com <td>, fora de serigyEmpty)
+   * Só clica no elemento do serigyExecuteWaitSection do filtro, nunca em item de exportação.
+   */
+  async analisarAno({ url, ano, waitSection }: AnoRequest): Promise<HistoricoAno> {
+    const timeout = this.opts.anoTimeoutMs;
+    const falha = (codigo: NonNullable<HistoricoAno['codigo']>, detalhe: string): HistoricoAno => ({ ano, passou: false, codigo, detalhe });
+    const page = await this.context.newPage();
+    page.on('dialog', (d) => void d.dismiss().catch(() => undefined));
+    try {
+      try {
+        await page.goto(url, { waitUntil: 'domcontentloaded', timeout: this.opts.navigationTimeoutMs });
+      } catch (err) {
+        return falha('ERROR_ON_SET_OPTION', `Erro ao abrir ${url}: ${primeiraLinha(err)}`);
+      }
+      await page.waitForLoadState('networkidle', { timeout: this.opts.settleMs }).catch(() => undefined);
+
+      const load = JSON.stringify(waitSection);
+      const loadSelector = `[serigyloadsection=${load}]`;
+      const exec = `[serigyexecutewaitsection=${load}]`;
+      // Marca o select do histórico (o próprio elemento, um select dentro dele ou dentro do filtro) e lê as opções.
+      const filtro = await page.evaluate((attr) => {
+        const root = document.querySelector('[serigyitem="historicoExercicio"]');
+        const scope = root?.closest('[serigyitem="filtroPesquisa"]') ?? null;
+        const select =
+          root instanceof HTMLSelectElement
+            ? root
+            : (root?.querySelector('select') ?? scope?.querySelector('select') ?? document.querySelector('select'));
+        if (!select) return null;
+        select.setAttribute(attr, '1');
+        return [...select.options].map((o) => ({
+          value: o.value,
+          key: (o.getAttribute('serigyvalue') ?? (o.value || o.text)).trim(),
+          selected: o.selected,
+        }));
+      }, 'data-avaliador-ano');
+      if (!filtro) return falha('ERROR_ON_SET_OPTION', `Erro ao selecionar ${ano} em ${url}: filtro de ano (select) não encontrado`);
+      const opcao = filtro.find((o) => o.key === ano);
+      if (!opcao) return falha('INVALID_OPTION', `${ano} é uma opção inválida`);
+
+      // Estado da seção que deve mudar: a URL e o HTML do serigyLoadSection (null = ainda não existe).
+      const estado = () =>
+        page
+          .evaluate((sel) => ({ url: location.href, html: document.querySelector(sel)?.outerHTML ?? null }), loadSelector)
+          .catch(() => null);
+      const antes = await estado();
+      const clicar = () =>
+        page
+          .locator(exec)
+          .first()
+          .click({ timeout: 2_000, noWaitAfter: true })
+          .catch(() => undefined);
+
+      if (!opcao.selected) {
+        try {
+          await page.locator('[data-avaliador-ano="1"]').first().selectOption({ value: opcao.value }, { timeout: 5_000 });
+        } catch (err) {
+          return falha('ERROR_ON_SET_OPTION', `Erro ao selecionar ${ano} em ${page.url()}: ${primeiraLinha(err)}`);
+        }
+      }
+      await clicar();
+
+      // Espera a seção mudar (ou, para o ano já selecionado, aparecer). Uma navegação também conta como mudança.
+      const limite = Date.now() + timeout;
+      let mudou = false;
+      while (Date.now() < limite) {
+        const agora = await estado();
+        if (agora?.html != null && (opcao.selected ? true : agora.url !== antes?.url || agora.html !== antes?.html)) {
+          mudou = true;
+          break;
+        }
+        await page.waitForTimeout(250);
+      }
+      if (!mudou) {
+        return falha('TABLE_NOT_CHANGED', `O valor ${ano} não alterou [serigyLoadSection=${load}]: Waiting failed: ${timeout}ms exceeded`);
+      }
+      await page.waitForLoadState('networkidle', { timeout: this.opts.settleMs }).catch(() => undefined);
+      const linhas = await page
+        .evaluate(
+          (sel) =>
+            [...(document.querySelector(sel)?.querySelectorAll('tr') ?? [])].filter(
+              (tr) => tr.querySelector('td') && !tr.hasAttribute('serigyempty') && !tr.querySelector('[serigyempty]'),
+            ).length,
+          loadSelector,
+        )
+        .catch(() => 0);
+      return { ano, passou: true, comDados: linhas > 0, ...(linhas === 0 ? { detalhe: `Nenhuma linha de dados em [serigyLoadSection=${load}]` } : {}) };
     } finally {
       await page.close().catch(() => undefined);
     }

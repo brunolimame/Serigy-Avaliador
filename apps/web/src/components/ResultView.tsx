@@ -17,7 +17,7 @@ import {
   X,
   type LucideIcon,
 } from 'lucide-react';
-import type { EvaluationResult, ItemResult, ItemStatus, PageResult, SectionResult, SerigyOficialItem, SerigySummary, Summary } from '@serigy/shared';
+import type { EvaluationResult, HistoricoAno, ItemResult, ItemStatus, PageResult, SectionResult, SerigyOficialItem, SerigySummary, Summary } from '@serigy/shared';
 import { analyzedMatchesExpected, evaluationDuration, groupPagesByNumber, MAX_EVIDENCE, parseSerigyDetalhe, serigySummarize, summarize } from '@serigy/shared';
 import { api, download } from '../api';
 import { SCORE_STYLE, scoreTone, type ScoreTone } from '../score';
@@ -232,11 +232,10 @@ const SCORE_ICON: Record<ScoreTone, { icon: LucideIcon; className: string; label
 
 /**
  * Selos do atendimento: percentual (< 40% vermelho, de 40% a < 100% amarelo, 100% verde) e, quando existirem,
- * um contador separado e com a cor própria para parcialmente atendidos (serigyEmpty) e não atendidos (atenção + não encontrado).
+ * um contador separado, com a cor própria, para parcialmente atendidos (azul, serigyEmpty), em atenção (amarelo) e não encontrados (vermelho).
  */
 function ScoreBadge({ summary, serigy }: { summary: Summary; serigy?: SerigySummary & { oficial: boolean } }) {
   const tone = SCORE_STYLE[scoreTone(summary.score)];
-  const unmet = summary.warning + summary.missing;
   const counter = (status: ItemStatus, count: number, label: string) => {
     const t = TONE[status];
     const Icon = t.icon;
@@ -258,7 +257,8 @@ function ScoreBadge({ summary, serigy }: { summary: Summary; serigy?: SerigySumm
         {summary.score}% · {summary.ok + summary.empty}/{summary.total}
       </Badge>
       {summary.empty > 0 && counter('empty', summary.empty, 'parcialmente atendido(s)')}
-      {unmet > 0 && counter('missing', unmet, 'não atendido(s)')}
+      {summary.warning > 0 && counter('warning', summary.warning, 'em atenção')}
+      {summary.missing > 0 && counter('missing', summary.missing, 'não encontrado(s)')}
       {serigy && serigy.total > 0 && (
         <Badge
           variant='outline'
@@ -289,6 +289,38 @@ function SectionScore({
   const finished = items.filter((i) => !pending?.has(i.id) && !busy?.has(i.id));
   if (items.length === 0 || finished.length < items.length) return null;
   return <ScoreBadge summary={summarize(finished)} serigy={serigyOf(finished, oficial)} />;
+}
+
+/** Análise de cada ano do historicoExercicio: passou (a troca de ano funcionou) e, quando passou, se há dados. */
+function AnosHistorico({ anos, detalhado = false }: { anos: Array<HistoricoAno | undefined>; detalhado?: boolean }) {
+  const lista = anos.filter((a): a is HistoricoAno => Boolean(a));
+  if (lista.length === 0) return null;
+  const tag = (kind: 'ok' | 'warn' | 'bad' | 'info', text: string) => (
+    <Badge
+      variant="outline"
+      className={cn(
+        'font-medium',
+        kind === 'ok' && 'border-emerald-300 bg-emerald-100 text-emerald-800 dark:border-emerald-800 dark:bg-emerald-900/50 dark:text-emerald-200',
+        kind === 'warn' && 'border-amber-300 bg-amber-100 text-amber-900 dark:border-amber-800 dark:bg-amber-900/50 dark:text-amber-200',
+        kind === 'bad' && 'border-rose-300 bg-rose-100 text-rose-800 dark:border-rose-800 dark:bg-rose-900/50 dark:text-rose-200',
+        kind === 'info' && 'border-sky-300 bg-sky-100 text-sky-800 dark:border-sky-800 dark:bg-sky-900/50 dark:text-sky-200',
+      )}
+    >
+      {text}
+    </Badge>
+  );
+  return (
+    <div className={cn('flex flex-wrap items-center gap-x-3 gap-y-1.5 text-xs', !detalhado && 'mt-1')} aria-label="Análise dos anos do histórico">
+      {!detalhado && <span className="text-muted-foreground">Anos:</span>}
+      {lista.map((a) => (
+        <span key={a.ano} className="inline-flex items-center gap-1" title={a.detalhe}>
+          <strong className="tabular-nums">{a.ano}</strong>
+          {a.passou ? tag('ok', 'Passou') : tag('bad', `Falhou${a.codigo ? ` · ${a.codigo}` : ''}`)}
+          {a.passou && (a.comDados ? tag('info', 'Com dados') : tag('warn', 'Sem dados'))}
+        </span>
+      ))}
+    </div>
+  );
 }
 
 /** Selo do veredito Serigy (atende ou não, com o código do erro). */
@@ -441,6 +473,17 @@ function ItemDetails({ item, page, section, oficial }: { item: ItemResult; page:
         />
         {hasFoundList(item) && <FoundOccurrences item={item} />}
       </div>
+      {item.anos && item.anos.length > 0 && (
+        <div className="space-y-1">
+          <strong>Anos do histórico:</strong>
+          <AnosHistorico anos={item.anos} detalhado />
+          {item.anos.some((a) => a && a.detalhe) && (
+            <ul className="list-disc space-y-0.5 pl-5 text-muted-foreground">
+              {item.anos.map((a) => a?.detalhe && <li key={a.ano} className="break-words">{a.ano}: {a.detalhe}</li>)}
+            </ul>
+          )}
+        </div>
+      )}
       {(item.serigy || oficial) && (
         <div>
           <strong>Serigy:</strong>
@@ -629,6 +672,7 @@ export function ResultView({ result, onChange, pending, progress, onCancel, read
         maxPages: result.crawl.maxPages,
         tryDocumentedCase: result.crawl.tryDocumentedCase,
         renderer: result.crawl.renderer,
+        anosHistorico: result.crawl.anosHistorico,
       });
       onChange({ ...result, invoker: fresh.invoker });
     } catch (err) {
@@ -651,6 +695,7 @@ export function ResultView({ result, onChange, pending, progress, onCancel, read
         maxPages: result.crawl.maxPages,
         tryDocumentedCase: result.crawl.tryDocumentedCase,
         renderer: result.crawl.renderer,
+        anosHistorico: result.crawl.anosHistorico,
       });
       onChange(mergeReevaluated(result, fresh, itemId));
     } catch (err) {
@@ -677,6 +722,7 @@ export function ResultView({ result, onChange, pending, progress, onCancel, read
         maxPages: result.crawl.maxPages,
         tryDocumentedCase: result.crawl.tryDocumentedCase,
         renderer: result.crawl.renderer,
+        anosHistorico: result.crawl.anosHistorico,
       });
       onChange(mergeReevaluatedMany(result, fresh));
     } catch (err) {
@@ -1064,6 +1110,7 @@ export function ResultView({ result, onChange, pending, progress, onCancel, read
                                     URL analisada: <UrlMatchBadge item={i} /> <UrlList urls={i.analyzedUrls} />
                                   </div>
                                   <SerigyLine item={i} oficial={serigyOficial?.[i.id]} />
+                                  {i.anos && <AnosHistorico anos={i.anos} />}
 
                                   {/* Alerta do iframe junto do item que depende dele */}
                                   {iframes.map((v) => {

@@ -52,6 +52,18 @@ const itemSchema = z.strictObject({
     .max(200)
     .optional(),
   evidence: z.array(z.strictObject({ pageUrl: httpUrl, snippet: text(1000) })).max(MAX_EVIDENCE),
+  anos: z
+    .array(
+      z.strictObject({
+        ano: text(10),
+        passou: z.boolean(),
+        comDados: z.boolean().optional(),
+        codigo: z.enum(['INVALID_OPTION', 'ERROR_ON_SET_OPTION', 'TABLE_NOT_CHANGED']).optional(),
+        detalhe: text(4000).optional(),
+      }),
+    )
+    .max(20)
+    .optional(),
   serigy: z
     .strictObject({
       ponto: z.boolean(),
@@ -109,6 +121,7 @@ export const resultadoSchema = z.strictObject({
     maxPages: z.number().int().min(1).max(200),
     tryDocumentedCase: z.boolean(),
     renderer: z.enum(['browser', 'http']),
+    anosHistorico: z.number().int().min(1).max(10).optional(),
   }),
   summary: summarySchema,
   pages: z.array(pageSchema).max(200),

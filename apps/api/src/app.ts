@@ -33,6 +33,7 @@ const evaluationSchema = z.object({
   tryDocumentedCase: z.boolean().optional(),
   renderer: z.enum(['browser', 'http']).optional(),
   compatibilidadeSerigy: z.boolean().optional(),
+  anosHistorico: z.number().int().min(1).max(10).optional(),
   portalNome: z.string().max(120).optional(),
   portalAmbiente: z.enum(['producao', 'desenvolvimento']).optional(),
 });
@@ -102,7 +103,7 @@ export function createApp(deps: AppDeps = {}) {
 
   /** Os campos que a requisição não informa vêm das configurações gerais da aplicação. */
   const withSettings = <
-    T extends { maxPages?: number; tryDocumentedCase?: boolean; renderer?: 'browser' | 'http'; compatibilidadeSerigy?: boolean },
+    T extends { maxPages?: number; tryDocumentedCase?: boolean; renderer?: 'browser' | 'http'; compatibilidadeSerigy?: boolean; anosHistorico?: number },
   >(
     req: T,
   ): T => {
@@ -113,6 +114,7 @@ export function createApp(deps: AppDeps = {}) {
       tryDocumentedCase: req.tryDocumentedCase ?? (v['comportamento.testarGrafiaDocumentacao'] as boolean),
       renderer: req.renderer ?? (v['comportamento.navegador'] ? 'browser' : 'http'),
       compatibilidadeSerigy: req.compatibilidadeSerigy ?? (v['comportamento.compatibilidadeSerigy'] as boolean),
+      anosHistorico: req.anosHistorico ?? (v['comportamento.anosHistorico'] as number),
     };
   };
 

@@ -4,6 +4,8 @@
  * sem tocar no restante (ver docs/avaliador.md, "Estendendo").
  */
 
+import type { HistoricoAno } from '@serigy/shared';
+
 export interface LoadedPage {
   /** URL final (após redirecionamentos). */
   url: string;
@@ -12,8 +14,22 @@ export interface LoadedPage {
   error?: string;
 }
 
+/** Pedido de análise de UM ano do `historicoExercicio` numa página. */
+export interface AnoRequest {
+  /** Página onde o filtro está (a URL em que o `historicoExercicio` foi encontrado). */
+  url: string;
+  ano: string;
+  /** Valor do `serigyExecuteWaitSection` do filtro; o `serigyLoadSection` de mesmo valor é a seção que deve mudar. */
+  waitSection: string;
+}
+
 export interface PageLoader {
   load(url: string): Promise<LoadedPage>;
+  /**
+   * Seleciona o ano no filtro, executa o `serigyExecuteWaitSection` e espera o `serigyLoadSection` mudar. Só existe
+   * em carregadores que executam JavaScript (navegador); sem ele a análise dos anos é ignorada.
+   */
+  analisarAno?(req: AnoRequest): Promise<HistoricoAno>;
   /** Libera recursos (ex.: contexto do navegador). Chamado ao fim de cada avaliação. */
   close?(): Promise<void>;
 }

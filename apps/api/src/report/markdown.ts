@@ -73,6 +73,13 @@ function itemDetail(out: string[], p: PageResult, s: SectionResult, i: ItemResul
   out.push(`- **Critério(s):** ${i.criterios.join(', ') || '—'}`);
   if (s.caminhoUrl) out.push(`- **Caminho sugerido:** ${code(s.caminhoUrl)}`);
   out.push(`- **Esperado:** ${i.expected}`);
+  if (i.anos?.length) {
+    out.push('- **Anos do histórico:**');
+    for (const a of i.anos) {
+      const situacao = a.passou ? `✅ passou — ${a.comDados ? 'com dados' : '⚠️ sem dados'}` : `❌ falhou${a.codigo ? ` ${code(a.codigo)}` : ''}`;
+      out.push(`  - ${a.ano}: ${situacao}${a.detalhe ? ` — ${a.detalhe}` : ''}`);
+    }
+  }
   if (i.serigyEmpty?.length) {
     out.push(`- **serigyEmpty (${i.serigyEmpty.length} ocorrência(s)):**`);
     for (const c of i.serigyEmpty) {
