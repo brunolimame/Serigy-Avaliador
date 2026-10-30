@@ -204,9 +204,9 @@ pontuaria o item (`ponto` = pontua ou não; `codigo` = `URL_NOT_ACCESSIBLE`, `SC
 
 **Item atendido que o Serigy não pontua vira "Atenção".** Se o `status` é `ok` e o veredito Serigy estimado não pontua, o
 avaliador já grava o item como `warning` (mensagem "Atenção: o Serigy estimado não pontua este item (CÓDIGO)"; `withSerigyEstimadoAtencao`
-em `packages/shared`). O mesmo vale para o Serigy **oficial** anexado a uma avaliação do histórico, mas só na visão
-(`applySerigyOficial`): o resultado guardado, o hash e a exportação JSON não mudam; a UI, os resumos da avaliação aberta e o
-relatório Markdown contam o item como Atenção. O percentual mostrado na lista do histórico continua o do resultado guardado.
+em `packages/shared`). O Serigy **oficial** anexado a uma avaliação do histórico **não altera** o `status`, os resumos nem os percentuais do
+avaliador: ele aparece só por item (selo "oficial", aviso quando diverge do estimado) e no resumo "Serigy oficial". Assim o
+percentual da lista do histórico e o da avaliação aberta são sempre o mesmo.
 
 Na UI, o resultado mostra "Serigy estimado" (percentual e n/total) no topo e no selo de página, grupo e seção, e um
 selo por item. Em avaliações **antigas** do histórico (sem o campo) nada é mostrado.

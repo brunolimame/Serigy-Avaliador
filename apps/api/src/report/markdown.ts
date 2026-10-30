@@ -1,4 +1,4 @@
-import { AMBIENTES, analyzedMatchesExpected, compareIds, groupPagesByNumber, MAX_EVIDENCE, parseSerigyDetalhe, applySerigyOficial, serigySummarize, splitMessage, summarize, evaluationDuration, type EvaluationResult, type FetchOrigin, type ItemResult, type ItemStatus, type PageResult, type SectionResult, type SerigyOficialItem, type Summary } from '@serigy/shared';
+import { AMBIENTES, analyzedMatchesExpected, compareIds, groupPagesByNumber, MAX_EVIDENCE, parseSerigyDetalhe, serigySummarize, splitMessage, summarize, evaluationDuration, type EvaluationResult, type FetchOrigin, type ItemResult, type ItemStatus, type PageResult, type SectionResult, type SerigyOficialItem, type Summary } from '@serigy/shared';
 
 const ICON: Record<ItemStatus, string> = { ok: '✅', warning: '⚠️', empty: '➖', missing: '❌' };
 const LABEL: Record<ItemStatus, string> = {
@@ -118,8 +118,7 @@ function serigyCell(i: ItemResult, oficial?: Record<string, SerigyOficialItem>):
 }
 
 /** Gera o relatório de uma avaliação em Markdown. `oficial` = itens do Serigy oficial pareados (id do avaliador -> item). */
-export function renderMarkdown(resultado: EvaluationResult, oficial?: Record<string, SerigyOficialItem>): string {
-  const r = applySerigyOficial(resultado, oficial);
+export function renderMarkdown(r: EvaluationResult, oficial?: Record<string, SerigyOficialItem>): string {
   const out: string[] = [];
   out.push(`# Relatório de avaliação Serigy — PNTP 2026`, '');
   out.push(`- **Portal avaliado:** ${r.portalNome ? `${r.portalNome} — ` : ''}${r.url}`);

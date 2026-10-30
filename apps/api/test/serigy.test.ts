@@ -1,6 +1,6 @@
 import type { Server } from 'node:http';
 import { afterEach, beforeAll, describe, expect, it } from 'vitest';
-import { applySerigyOficial, evaluationDuration, formatDuration, serigySummarize, type EvaluationResult, type SerigyOficialItem } from '@serigy/shared';
+import { evaluationDuration, formatDuration, serigySummarize, type EvaluationResult, type SerigyOficialItem } from '@serigy/shared';
 import { createApp } from '../src/app';
 import { AvaliacoesRepo, PortaisRepo, SettingsRepo } from '../src/db';
 import { openDatabase } from '../src/db/database';
@@ -276,31 +276,25 @@ describe('API do Serigy oficial', () => {
   });
 });
 
-describe('Serigy oficial: atendido que não pontua vira Atenção', () => {
-  it('altera só a visão, recalcula os resumos e mantém o resultado guardado', async () => {
+describe('Serigy oficial anexado não altera a estatística do avaliador', () => {
+  it('o resultado, o resumo e o relatório do avaliador ficam iguais; o oficial só aparece por item', async () => {
     const html = `<table serigySchema="${SCHEMA}"><tr><td serigyItem="valorEmpenhado">1,00</td></tr></table>`;
     const r = await run(new FakeLoader({ [P]: '<html/>', [D]: html }), { items: ['4.1.1', '4.1.2'] });
-    expect(find(r, '4.1.1').status).toBe('ok');
-    const par = (ponto: boolean, detalhe: string | null): SerigyOficialItem => ({
-      dimensao: 'Despesas',
-      itemId: '4.1.1',
-      serigyItem: 'valorEmpenhado',
-      serigySchema: SCHEMA,
-      ponto,
-      detalhe,
-    });
-    expect(applySerigyOficial(r, undefined)).toBe(r);
-    expect(applySerigyOficial(r, { '4.1.1': par(true, null) })).toBe(r); // o oficial pontua: nada muda
+    const antes = JSON.stringify(r.summary);
+    const par: SerigyOficialItem = { dimensao: 'Despesas', itemId: '4.1.1', serigyItem: 'valorEmpenhado', serigySchema: SCHEMA, ponto: false, detalhe: 'SERIGYITEM_NOT_VALID|x' };
 
-    const v = applySerigyOficial(r, { '4.1.1': par(false, 'SERIGYITEM_NOT_VALID|x') });
-    const item = find(v, '4.1.1');
-    expect(item.status).toBe('warning');
-    expect(item.message).toContain('Atenção: o Serigy oficial não pontua este item (SERIGYITEM_NOT_VALID)');
-    expect(v.summary.ok).toBe(r.summary.ok - 1);
-    expect(v.summary.warning).toBe(r.summary.warning + 1);
-    expect(v.pages.flatMap((p) => p.summary.ok).reduce((a, b) => a + b, 0)).toBe(v.summary.ok);
-    expect(find(r, '4.1.1').status).toBe('ok'); // original intacto
-    expect(renderMarkdown(r, { '4.1.1': par(false, 'SERIGYITEM_NOT_VALID|x') })).toContain('Atenção: o Serigy oficial não pontua');
+    const repo = new AvaliacoesRepo(openDatabase(':memory:'), () => new Date('2026-10-30T10:00:00Z'));
+    const salvo = repo.save({ ...r, scope: { ...r.scope, mode: 'todos' } }, 'local');
+    repo.setSerigy(salvo.id, [par]);
+    const d = repo.get(salvo.id)!;
+    expect(JSON.stringify(d.resultado.summary)).toBe(antes);
+    expect(salvo.summary.score).toBe(repo.resumo(salvo.id)!.summary.score);
+    expect(find(d.resultado, '4.1.1').status).toBe('ok'); // continua atendido para o avaliador
+    expect(d.serigyPorItem?.['4.1.1']?.ponto).toBe(false);
+
+    const md = renderMarkdown(d.resultado, d.serigyPorItem);
+    expect(md).toContain('oficial: ❌');
+    expect(md).not.toContain('Atenção: o Serigy oficial');
   });
 });
 
