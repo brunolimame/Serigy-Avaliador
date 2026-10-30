@@ -140,6 +140,11 @@ export interface EvaluationRequest {
   /** Nome do portal cadastrado (só para identificar a avaliação no resultado e no relatório). */
   portalNome?: string;
   portalAmbiente?: Ambiente;
+  /**
+   * Reproduz no veredito Serigy (`ItemResult.serigy`) comportamentos conhecidos do validador oficial que divergem da
+   * documentação (ver `SERIGY_SCHEMA_QUIRKS`). Padrão: configuração `comportamento.compatibilidadeSerigy`.
+   */
+  compatibilidadeSerigy?: boolean;
 }
 
 export type Renderer = 'browser' | 'http';
@@ -191,6 +196,45 @@ export interface SerigyEmptyCheck {
   pageUrl: string;
 }
 
+/** Códigos de erro do validador oficial do Serigy. */
+export type SerigyCodigo =
+  | 'URL_NOT_ACCESSIBLE'
+  | 'SCHEMA_NOT_FOUND'
+  | 'SERIGYITEM_NOT_FOUND'
+  | 'SERIGYITEM_NOT_VALID'
+  | 'WAITSECTION_NOT_FOUND';
+
+export const SERIGY_CODIGOS: SerigyCodigo[] = [
+  'URL_NOT_ACCESSIBLE',
+  'SCHEMA_NOT_FOUND',
+  'SERIGYITEM_NOT_FOUND',
+  'SERIGYITEM_NOT_VALID',
+  'WAITSECTION_NOT_FOUND',
+];
+
+/**
+ * Veredito estimado do item como o validador oficial do Serigy o daria (atende ou não). Fica em campo próprio:
+ * o `status` do avaliador (com `warning` e `empty`) e todos os detalhes continuam como estão.
+ */
+export interface SerigyVeredito {
+  ponto: boolean;
+  /** Presente quando `ponto` é falso. */
+  codigo?: SerigyCodigo;
+  /** Por que o veredito é esse (inclusive avisos que não mudam o veredito). */
+  detalhe?: string;
+}
+
+/**
+ * Schemas que o validador oficial do Serigy espera de forma diferente da documentação (a matriz é a fonte da verdade
+ * e não é alterada). Com a compatibilidade ligada, o item vira "não atende" no veredito Serigy.
+ */
+export const SERIGY_SCHEMA_QUIRKS: Array<{ documentado: string; serigyEspera: string }> = [
+  {
+    documentado: 'https://serigy.tce.se.gov.br/consorcios/atividades-finalisticas.html',
+    serigyEspera: 'https://serigy.tce.se.gov.br/consorcio/atividades-finalisticas.html',
+  },
+];
+
 export interface ItemResult {
   id: string;
   sectionId: string;
@@ -222,6 +266,8 @@ export interface ItemResult {
   serigyEmpty?: SerigyEmptyCheck[];
   /** Até 3 trechos de HTML que comprovam o achado. */
   evidence: Array<{ pageUrl: string; snippet: string }>;
+  /** Veredito estimado do validador oficial do Serigy; ausente em avaliações antigas do histórico. */
+  serigy?: SerigyVeredito;
 }
 
 /**
@@ -243,6 +289,20 @@ export interface Summary {
   missing: number;
   /** (ok + empty) / total, de 0 a 100. */
   score: number;
+}
+
+/** Resumo do veredito Serigy de uma lista de itens (só os que têm veredito). `score` = atendidos / total, de 0 a 100. */
+export interface SerigySummary {
+  total: number;
+  atendidos: number;
+  score: number;
+}
+
+export function serigySummarize(items: Array<{ serigy?: { ponto: boolean } }>): SerigySummary {
+  const rated = items.filter((i) => i.serigy);
+  const atendidos = rated.filter((i) => i.serigy!.ponto).length;
+  const total = rated.length;
+  return { total, atendidos, score: total === 0 ? 0 : Math.round((atendidos / total) * 1000) / 10 };
 }
 
 export interface SectionResult {
@@ -319,6 +379,24 @@ export interface EvaluationResult {
 export interface CatalogResponse {
   poder: PoderInfo;
   pages: CatalogPage[];
+}
+
+/** Duração legível: "45 s", "1 min 8 s", "1 h 02 min 03 s" (arredonda ao segundo; negativo vira 0). */
+export function formatDuration(ms: number): string {
+  const total = Math.max(0, Math.round(ms / 1000));
+  const h = Math.floor(total / 3600);
+  const m = Math.floor((total % 3600) / 60);
+  const s = total % 60;
+  const two = (n: number) => String(n).padStart(2, '0');
+  if (h > 0) return `${h} h ${two(m)} min ${two(s)} s`;
+  if (m > 0) return `${m} min ${s} s`;
+  return `${s} s`;
+}
+
+/** Quanto tempo a avaliação levou (do início ao fim), em texto; vazio se as datas forem inválidas. */
+export function evaluationDuration(r: { startedAt: string; finishedAt: string }): string {
+  const ms = Date.parse(r.finishedAt) - Date.parse(r.startedAt);
+  return Number.isNaN(ms) ? '' : formatDuration(ms);
 }
 
 /** Resume uma lista de itens. `score` = (ok + empty) / total, de 0 a 100. */
@@ -496,6 +574,15 @@ export const SETTINGS: SettingDef[] = [
     descricao:
       'Os caminhos (ex.: /Despesas) são testados sempre em minúsculas (/despesas). Com esta opção, se a minúscula falhar (404 ou outro erro), a grafia da documentação também é testada.',
   },
+  {
+    chave: 'comportamento.compatibilidadeSerigy',
+    categoria: 'comportamento',
+    tipo: 'boolean',
+    padrao: true,
+    rotulo: 'Reproduzir no veredito Serigy os desvios conhecidos do validador oficial',
+    descricao:
+      'Ligada, o veredito Serigy estimado também reproduz o que o validador oficial faz de diferente da documentação: hoje, ele procura o schema da seção 25 (Atividades Finalísticas dos consórcios) como “consorcio/…” e a matriz publica “consorcios/…”. Só afeta o veredito Serigy; o status do avaliador segue a documentação.',
+  },
 ];
 
 export interface SettingsResponse {
@@ -526,6 +613,8 @@ export interface AvaliacaoResumo {
   poder: PoderId;
   poderLabel: string;
   summary: Summary;
+  /** Resumo do Serigy oficial, quando o arquivo dele foi anexado. */
+  serigy?: SerigySummary;
 }
 
 export interface AvaliacaoDetalhe {
@@ -533,12 +622,40 @@ export interface AvaliacaoDetalhe {
   resultado: EvaluationResult;
   /** `generatedAt` do catálogo (matriz PNTP) vigente quando a avaliação foi salva. */
   catalogoGeradoEm?: string;
+  /** Avaliação do validador oficial do Serigy anexada a esta avaliação (arquivo exportado pelo Serigy). */
+  serigyOficial?: SerigyOficial;
+  /** Item do avaliador (id) -> item correspondente do Serigy oficial (pareado por id + atributo, ou caminho + atributo). */
+  serigyPorItem?: Record<string, SerigyOficialItem>;
+}
+
+/** Um item do arquivo de avaliação exportado pelo Serigy oficial. */
+export interface SerigyOficialItem {
+  dimensao: string;
+  itemId: string;
+  serigyItem: string;
+  serigySchema: string;
+  ponto: boolean;
+  /** `CODIGO|mensagem` quando o item não pontuou. */
+  detalhe: string | null;
+}
+
+export interface SerigyOficial {
+  /** Quando o arquivo foi anexado neste computador. */
+  importadoEm: string;
+  itens: SerigyOficialItem[];
+}
+
+/** Separa o código do erro oficial (`CODIGO|mensagem`) da mensagem. */
+export function parseSerigyDetalhe(detalhe: string | null): { codigo?: string; mensagem?: string } {
+  if (!detalhe) return {};
+  const i = detalhe.indexOf('|');
+  return i < 0 ? { mensagem: detalhe } : { codigo: detalhe.slice(0, i), mensagem: detalhe.slice(i + 1) };
 }
 
 /** Identificação do arquivo de exportação. */
 export const EXPORT_FORMAT = 'serigy-avaliacao';
 /** Versão do formato. Aumente ao mudar a estrutura de `resultado` (importadores antigos recusam versões maiores). */
-export const EXPORT_VERSION = 1;
+export const EXPORT_VERSION = 2;
 
 /**
  * Arquivo JSON de uma avaliação, para guardar ou enviar a outra pessoa. O `hash` (SHA-256 do `resultado`
@@ -552,6 +669,8 @@ export interface AvaliacaoEnvelope {
   catalogo: { geradoEm: string };
   hash: string;
   resultado: EvaluationResult;
+  /** Avaliação do Serigy oficial anexada (versão 2 em diante); fica fora do hash do `resultado`. */
+  serigyOficial?: SerigyOficial;
 }
 
 /**

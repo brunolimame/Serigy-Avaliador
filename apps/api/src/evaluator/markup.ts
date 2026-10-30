@@ -28,6 +28,13 @@ export interface MarkupElement {
   text: string;
   hasInnerLink: boolean;
   hasInnerImage: boolean;
+  /**
+   * Só em historicoExercicio: valor do serigyExecuteWaitSection do próprio elemento ou do filtro
+   * (serigyItem="filtroPesquisa") que o contém; indefinido = não há (o validador oficial exige).
+   */
+  waitSection?: string;
+  /** Só em historicoExercicio: existe um serigyLoadSection de mesmo valor no HTML da página. */
+  waitLoadPresent?: boolean;
   snippet: string;
 }
 
@@ -175,6 +182,16 @@ export function extractMarkup(html: string, baseUrl: string, pageUrl: string = b
       .join(' ');
     const text = (tag === 'meta' ? el.attr('content') : el.text()) ?? '';
     const cleanText = text.replace(/\s+/g, ' ').trim();
+    let waitSection: string | undefined;
+    if (el.attr('serigyitem')?.trim() === 'historicoExercicio') {
+      const filter = el.closest('[serigyitem="filtroPesquisa"]');
+      const waitEl = el.is('[serigyexecutewaitsection]')
+        ? el
+        : filter.length
+          ? filter.find('[serigyexecutewaitsection]').first()
+          : $();
+      waitSection = waitEl.attr('serigyexecutewaitsection')?.trim() || undefined;
+    }
     elements.push({
       pageUrl,
       tag,
@@ -189,6 +206,7 @@ export function extractMarkup(html: string, baseUrl: string, pageUrl: string = b
       text: cleanText,
       hasInnerLink: el.find('a[href]').length > 0,
       hasInnerImage: el.find('img[src]').length > 0,
+      ...(waitSection !== undefined ? { waitSection, waitLoadPresent: loads.has(waitSection) } : {}),
       snippet: `<${tag} ${attrs}>${cleanText.slice(0, 60)}`,
     });
   });

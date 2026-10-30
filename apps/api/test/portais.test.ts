@@ -89,7 +89,7 @@ describe('ambiente (produção/desenvolvimento)', () => {
       old.close();
       const db = openDatabase(file);
       expect(new PortaisRepo(db).list()[0]).toMatchObject({ nome: 'Antigo', ambiente: 'producao' });
-      expect((db.prepare('PRAGMA user_version').get() as { user_version: number }).user_version).toBe(4);
+      expect((db.prepare('PRAGMA user_version').get() as { user_version: number }).user_version).toBe(5);
       db.close();
     } finally {
       rmSync(dir, { recursive: true, force: true });
@@ -107,7 +107,7 @@ describe('persistência em arquivo', () => {
       db1.close();
       const db2 = openDatabase(file); // reabre: migração já aplicada, dados mantidos
       expect(new PortaisRepo(db2).list()).toHaveLength(1);
-      expect((db2.prepare('PRAGMA user_version').get() as { user_version: number }).user_version).toBe(4);
+      expect((db2.prepare('PRAGMA user_version').get() as { user_version: number }).user_version).toBe(5);
       db2.close();
     } finally {
       rmSync(dir, { recursive: true, force: true });

@@ -71,6 +71,16 @@ export const api = {
       if (!res.ok) await fail(res);
     },
     removeAll: () => request<{ removidas: number }>('/api/avaliacoes?confirmar=sim', { method: 'DELETE' }),
+    /** Anexa (ou substitui) a avaliação do Serigy oficial; `arquivo` é o JSON baixado do Serigy (validado pelo servidor). */
+    setSerigy: (id: number, arquivo: unknown) =>
+      request<AvaliacaoDetalhe>(`/api/avaliacoes/${id}/serigy`, { ...json(arquivo), method: 'PUT' }),
+    clearSerigy: (id: number) => request<AvaliacaoDetalhe>(`/api/avaliacoes/${id}/serigy`, { method: 'DELETE' }),
+    /** Baixa o JSON do Serigy anexado, no mesmo formato do arquivo que o Serigy gera. */
+    async exportSerigy(id: number): Promise<void> {
+      const res = await fetch(`/api/avaliacoes/${id}/serigy`);
+      if (!res.ok) await fail(res);
+      downloadBlob(fileNameOf(res) ?? `serigy-${id}.json`, await res.blob());
+    },
     /** Baixa o arquivo JSON importável do resultado atual (salvo ou não). */
     async exportCurrent(resultado: EvaluationResult): Promise<void> {
       const res = await fetch('/api/avaliacoes/exportar', json(resultado));

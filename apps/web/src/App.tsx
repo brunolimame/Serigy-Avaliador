@@ -535,6 +535,7 @@ export function App() {
               result={opened.resultado}
               onChange={() => undefined}
               readOnly
+              serigyOficial={opened.serigyPorItem}
               banner={
                 <div className="flex flex-wrap items-center gap-2 rounded-lg border border-l-4 border-l-blue-400 bg-blue-50/80 px-4 py-2.5 text-sm dark:bg-blue-950/40">
                   <History className="size-4 text-blue-600 dark:text-blue-400" />

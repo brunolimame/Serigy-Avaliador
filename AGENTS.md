@@ -67,7 +67,7 @@ podem ser corrigidos daqui**: registre a divergência no commit/PR e comunique o
 - Validação de entrada da API com **zod**. Erros de validação respondem HTTP 400 antes de abrir streams.
 - A UI só consome a API; o relatório Markdown é gerado **apenas** em `apps/api/src/report/markdown.ts` (sem templates duplicados).
 - Componentes de UI em `apps/web/src/components/ui/` vêm do CLI do shadcn (`pnpm dlx shadcn@latest add <componente>` dentro de `apps/web`); o estilo `base-nova` usa **Base UI**, não Radix.
-- Banco: nunca altere migrações já publicadas em `MIGRATIONS` (`db/database.ts`); acrescente uma nova (hoje v4).
+- Banco: nunca altere migrações já publicadas em `MIGRATIONS` (`db/database.ts`); acrescente uma nova (hoje v5).
 - Configurações: novas entradas em `SETTINGS` (`packages/shared`); padrão do máx. de páginas `serigyLink` = `DEFAULT_MAX_PAGES` (40).
 - Histórico: só avaliação completa; todo JSON importado passa por `history/schema.ts` + hash (`history/envelope.ts`). Mudou o formato exportado? Suba `EXPORT_VERSION`.
 - Testes não usam o banco real: `apps/api/vitest.config.ts` fixa `DATABASE_PATH=:memory:`. Em verificação manual use porta e banco próprios, nunca a API do usuário (3001).

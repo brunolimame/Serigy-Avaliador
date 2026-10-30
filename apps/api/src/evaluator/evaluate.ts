@@ -10,9 +10,10 @@ import type {
   ItemResult,
   PageResult,
   SectionResult,
+  SerigyVeredito,
   StreamEvent,
 } from '@serigy/shared';
-import { DEFAULT_MAX_PAGES, MAX_EVIDENCE, summarize } from '@serigy/shared';
+import { DEFAULT_MAX_PAGES, MAX_EVIDENCE, SERIGY_SCHEMA_QUIRKS, summarize } from '@serigy/shared';
 import { getPoder, loadCatalog, pagesForPoder } from '../catalog/load';
 import { describeExpected, validateType } from './checks';
 import { lowerPath, PageStore, urlKey } from './collector';
@@ -103,15 +104,32 @@ function delegationsFor(ctx: Context, scope: SectionScope, schemaKey: string, at
 }
 
 /** Avalia um item e anexa os exemplos da documentação (em qualquer situação, inclusive atendido). */
-function evaluateItem(item: CatalogItem, sectionId: string, page: CatalogPage, scope: SectionScope, ctx: Context): ItemResult {
-  const result = evaluateCore(item, sectionId, page, scope, ctx);
+function evaluateItem(
+  item: CatalogItem,
+  sectionId: string,
+  page: CatalogPage,
+  scope: SectionScope,
+  ctx: Context,
+  compat = false,
+): ItemResult {
+  const result = evaluateCore(item, sectionId, page, scope, ctx, compat);
   if (item.examples?.length) {
     result.examples = item.examples;
   }
   return result;
 }
 
-function evaluateCore(item: CatalogItem, sectionId: string, page: CatalogPage, scope: SectionScope, ctx: Context): ItemResult {
+/** Por que o item não atende (ou atende com ressalva) para o veredito Serigy. */
+type Cause = 'url' | 'schema' | 'item' | 'tipo' | 'cabecalho' | 'historico-sem-marcacao';
+
+function evaluateCore(
+  item: CatalogItem,
+  sectionId: string,
+  page: CatalogPage,
+  scope: SectionScope,
+  ctx: Context,
+  compat: boolean,
+): ItemResult {
   const schemaKey = normalizeSchema(page.schemaUrl);
   const sectionKey = urlKey(scope.url);
   const base = {
@@ -143,6 +161,51 @@ function evaluateCore(item: CatalogItem, sectionId: string, page: CatalogPage, s
   const expectedSchema = canonicalSchema(page.schemaUrl);
   const schema: ItemResult['schema'] = { esperado: page.schemaUrl, confere: false };
   let schemaMismatch = false;
+  // Veredito Serigy: o que levou ao resultado (preenchido nos ramos abaixo) e os achados já finais do item.
+  let cause: Cause | undefined;
+  let emptyBad = false;
+  let finalHits: MarkupElement[] = [];
+  const veredito = (out: ItemResult): SerigyVeredito => {
+    const fail = (codigo: NonNullable<SerigyVeredito['codigo']>, detalhe?: string): SerigyVeredito => ({ ponto: false, codigo, detalhe });
+    let v: SerigyVeredito;
+    if (out.status === 'missing') {
+      v = fail(cause === 'url' ? 'URL_NOT_ACCESSIBLE' : cause === 'schema' ? 'SCHEMA_NOT_FOUND' : 'SERIGYITEM_NOT_FOUND', out.message);
+    } else if (schemaMismatch) {
+      v = fail('SCHEMA_NOT_FOUND', `O schema encontrado não confere com o esperado (${schema.encontrado}).`);
+    } else if (out.status === 'warning') {
+      if (emptyBad || (cause !== 'tipo' && cause !== 'cabecalho')) v = fail('SERIGYITEM_NOT_VALID', out.message);
+      else {
+        v = {
+          ponto: true,
+          detalhe:
+            cause === 'cabecalho'
+              ? 'Só o cabeçalho (<th>) foi encontrado; o validador oficial pontua o item pela presença do serigyItem.'
+              : 'O valor não parece do tipo esperado; o validador oficial não reprova por isso.',
+        };
+      }
+    } else {
+      v = { ponto: true };
+    }
+    // historicoExercicio: o validador oficial exige o serigyItem no select e um serigyExecuteWaitSection no filtro.
+    if (v.ponto && item.atributo === HISTORICO_ATTR) {
+      const withWait = finalHits.some((e) => e.item === HISTORICO_ATTR && e.waitSection);
+      if (cause === 'historico-sem-marcacao') {
+        v = fail('WAITSECTION_NOT_FOUND', 'Só há um select de anos, sem serigyItem="historicoExercicio" nem serigyExecuteWaitSection no filtro.');
+      } else if (!withWait) {
+        v = fail('WAITSECTION_NOT_FOUND', 'Nenhum serigyExecuteWaitSection (botão de pesquisa do filtro) ligado ao historicoExercicio.');
+      } else if (!finalHits.some((e) => e.waitLoadPresent)) {
+        v = { ponto: true, detalhe: 'O serigyExecuteWaitSection não tem serigyLoadSection correspondente no HTML carregado (pode surgir após o clique).' };
+      }
+    }
+    // Desvios conhecidos do validador oficial em relação à documentação.
+    const quirk = SERIGY_SCHEMA_QUIRKS.find((q) => canonicalSchema(q.documentado) === expectedSchema);
+    if (quirk) {
+      const nota = `O validador oficial procura o schema "${quirk.serigyEspera}", diferente do publicado na documentação ("${quirk.documentado}").`;
+      if (compat && v.ponto) v = fail('SCHEMA_NOT_FOUND', nota);
+      else v = { ...v, detalhe: v.detalhe ? `${v.detalhe} ${nota}` : nota };
+    }
+    return v;
+  };
   const done = (r: Omit<ItemResult, 'loadedVia' | 'schema'>): ItemResult => {
     let out: ItemResult = { ...r, schema, ...(loadedVia.length ? { loadedVia } : {}) };
     // Schema incorreto: a informação do schema vem primeiro; a avaliação do item (inclusive serigyEmpty) segue depois.
@@ -153,12 +216,13 @@ function evaluateCore(item: CatalogItem, sectionId: string, page: CatalogPage, s
         message: `Item encontrado, mas o schema não confere: encontrado "${schema.encontrado}"; esperado "${page.schemaUrl}". ${out.message}`,
       };
     }
-    return out;
+    return { ...out, serigy: veredito(out) };
   };
 
   // A página do caminho da documentação não pôde ser baixada.
   const failure = ctx.failed.get(sectionKey);
   if (failure) {
+    cause = 'url';
     return done({
       ...base,
       status: 'missing',
@@ -193,6 +257,7 @@ function evaluateCore(item: CatalogItem, sectionId: string, page: CatalogPage, s
       );
       if (filters.length > 0) {
         schema.confere = true; // o filtro está dentro do schema esperado
+        cause = 'historico-sem-marcacao';
         return done({
           ...base,
           status: 'ok',
@@ -205,6 +270,7 @@ function evaluateCore(item: CatalogItem, sectionId: string, page: CatalogPage, s
 
     if (targets.length > 0) {
       const failedTargets = targets.map((t) => ctx.failed.get(urlKey(t))).filter(Boolean);
+      cause = failedTargets.length ? 'url' : itemLevel ? 'item' : 'schema';
       const via = delegs.some((d) => d.tag === 'iframe') ? 'O iframe' : 'O serigyLink';
       const reason = failedTargets.length
         ? `o endereço não pôde ser acessado (${failedTargets[0]})`
@@ -222,6 +288,7 @@ function evaluateCore(item: CatalogItem, sectionId: string, page: CatalogPage, s
     let message: string;
     // O item existe, mas sob outro schema (ou fora de qualquer schema): informa o encontrado x esperado.
     const elsewhere = sameAttr.filter((e) => e.schema !== schemaKey);
+    cause = elsewhere.length > 0 || !sectionMarkup?.schemas.has(schemaKey) ? 'schema' : 'item';
     if (elsewhere.length > 0) {
       const others = unique(elsewhere.map((e) => e.schemaRaw ?? '(fora de um serigySchema)')).join(', ');
       schema.encontrado = others;
@@ -245,6 +312,7 @@ function evaluateCore(item: CatalogItem, sectionId: string, page: CatalogPage, s
   const values = hits.filter((e) => e.tag !== 'th');
   const headerOnly = values.length === 0;
   if (!headerOnly) hits = values;
+  finalHits = hits;
 
   const analyzedUrls = unique(hits.map((e) => e.pageUrl));
   const filled = hits.filter((e) => e.empty === undefined);
@@ -265,6 +333,7 @@ function evaluateCore(item: CatalogItem, sectionId: string, page: CatalogPage, s
     const content = r.message;
     let { status } = r;
     let message = content ? `${content}; ${emptyText}` : emptyText;
+    emptyBad = emptyProblem;
     if (emptyProblem) status = 'warning';
     else if (filled.length === 0) {
       status = 'empty';
@@ -290,6 +359,7 @@ function evaluateCore(item: CatalogItem, sectionId: string, page: CatalogPage, s
   }
 
   if (headerOnly) {
+    cause = 'cabecalho';
     return finish({
       ...base,
       status: 'warning',
@@ -303,6 +373,7 @@ function evaluateCore(item: CatalogItem, sectionId: string, page: CatalogPage, s
   if (problems.some((p) => p === null)) {
     return finish({ ...base, status: 'ok', message: `Encontrado (${filled.length} ocorrência(s))`, analyzedUrls, evidence: evidence(filled) });
   }
+  cause = 'tipo';
   return finish({ ...base, status: 'warning', message: problems[0] ?? 'valor inválido', analyzedUrls, evidence: evidence(filled) });
 }
 
@@ -383,6 +454,7 @@ export function prepareEvaluation(req: EvaluationRequest, deps: EvaluateDeps = {
   const portal = url.href;
   const maxPages = Math.min(req.maxPages ?? DEFAULT_MAX_PAGES, 200);
   const tryDocumentedCase = req.tryDocumentedCase ?? false;
+  const compat = req.compatibilidadeSerigy ?? true;
   const docUrl = (s: CatalogSection) => documentedUrl(portal, s.caminhoUrl);
   const itemCount = selected.reduce((n, p) => n + p.sections.reduce((m, s) => m + s.items.length, 0), 0);
   const totalCatalogItems = available.reduce((n, p) => n + p.sections.reduce((m, s) => m + s.items.length, 0), 0);
@@ -466,7 +538,7 @@ export function prepareEvaluation(req: EvaluationRequest, deps: EvaluateDeps = {
       const expectedUrl = tryDocumentedCase ? requested : lowerPath(requested);
       const scope: SectionScope = { url: used, expectedUrl, caminho: section.caminhoUrl };
       for (const item of items) {
-        const result = evaluateItem(item, section.id, page, scope, store);
+        const result = evaluateItem(item, section.id, page, scope, store, compat);
         done.set(item.id, result);
         emit({ type: 'item', pageId: page.id, sectionId: section.id, item: result });
       }

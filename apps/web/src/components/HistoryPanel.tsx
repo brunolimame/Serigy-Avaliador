@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react';
-import { FileJson, FileText, Trash2, Upload } from 'lucide-react';
+import { FileJson, FileText, ShieldCheck, ShieldOff, Trash2, Upload } from 'lucide-react';
 import type { AvaliacaoResumo, Portal } from '@serigy/shared';
 import { api, ApiError } from '../api';
 import { AmbienteBadge } from './AmbienteBadge';
@@ -29,7 +29,11 @@ const sameUrl = (a: string, b: string) => a.replace(/\/+$/, '').toLowerCase() ==
 /** Lista das avaliações salvas (locais e importadas), com abrir, exportar, apagar e importar arquivo JSON. */
 export function HistoryPanel({ items, portais, openId, onOpen, onChanged, onRemoved, onPortaisChanged }: Props) {
   const fileRef = useRef<HTMLInputElement>(null);
+  const serigyRef = useRef<HTMLInputElement>(null);
+  // Avaliação que vai receber o arquivo do Serigy escolhido
+  const serigyTarget = useRef<number | null>(null);
   const [confirmId, setConfirmId] = useState<number | null>(null);
+  const [confirmSerigyId, setConfirmSerigyId] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [problemas, setProblemas] = useState<string[]>([]);
   const [duplicateId, setDuplicateId] = useState<number | null>(null);
@@ -70,6 +74,60 @@ export function HistoryPanel({ items, portais, openId, onOpen, onChanged, onRemo
     } finally {
       setBusy(false);
       if (fileRef.current) fileRef.current.value = '';
+    }
+  }
+
+  /** Anexa à avaliação o JSON baixado do Serigy (validação toda no servidor). */
+  async function attachSerigy(file: File) {
+    const id = serigyTarget.current;
+    clearMessages();
+    if (id === null) return;
+    setBusy(true);
+    try {
+      let content: unknown;
+      try {
+        content = JSON.parse(await file.text());
+      } catch {
+        setError('O arquivo do Serigy não é um JSON válido.');
+        return;
+      }
+      await api.avaliacoes.setSerigy(id, content);
+      onChanged();
+      // Reabre a avaliação para mostrar o Serigy junto de cada item
+      if (openId === id) onOpen(id);
+    } catch (e) {
+      if (e instanceof ApiError) {
+        setError(e.message);
+        setProblemas(e.extra.problemas ?? []);
+      } else setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+      serigyTarget.current = null;
+      if (serigyRef.current) serigyRef.current.value = '';
+    }
+  }
+
+  function pickSerigy(id: number) {
+    serigyTarget.current = id;
+    serigyRef.current?.click();
+  }
+
+  async function removeSerigy(id: number) {
+    try {
+      await api.avaliacoes.clearSerigy(id);
+      setConfirmSerigyId(null);
+      onChanged();
+      if (openId === id) onOpen(id);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    }
+  }
+
+  async function exportSerigy(id: number) {
+    try {
+      await api.avaliacoes.exportSerigy(id);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
     }
   }
 
@@ -121,6 +179,14 @@ export function HistoryPanel({ items, portais, openId, onOpen, onChanged, onRemo
           className="hidden"
           aria-label="Arquivo de avaliação (JSON)"
           onChange={(e) => e.target.files?.[0] && void importFile(e.target.files[0])}
+        />
+        <input
+          ref={serigyRef}
+          type="file"
+          accept="application/json,.json"
+          className="hidden"
+          aria-label="Arquivo de avaliação do Serigy (JSON)"
+          onChange={(e) => e.target.files?.[0] && void attachSerigy(e.target.files[0])}
         />
         <Button type="button" size="xs" variant="outline" className="ml-auto" disabled={busy} onClick={() => fileRef.current?.click()}>
           <Upload />
@@ -185,6 +251,15 @@ export function HistoryPanel({ items, portais, openId, onOpen, onChanged, onRemo
                     {a.portalAmbiente && <AmbienteBadge ambiente={a.portalAmbiente} />}
                     {a.origem === 'importada' && <Badge variant="secondary">Importada</Badge>}
                     <span className={cn('ml-auto font-semibold', tone.text)}>{a.summary.score.toFixed(1)}%</span>
+                    {a.serigy && (
+                      <span
+                        className={cn('inline-flex items-center gap-1 text-xs font-semibold', SCORE_STYLE[scoreTone(a.serigy.score)].text)}
+                        title={`Serigy oficial: ${a.serigy.atendidos} de ${a.serigy.total} item(ns) pontuam`}
+                      >
+                        <ShieldCheck className="size-3.5" aria-hidden />
+                        Serigy {a.serigy.score.toFixed(1)}%
+                      </span>
+                    )}
                   </span>
                   <span className="block text-xs text-muted-foreground">
                     {formatDateTime(a.avaliadaEm)} · {a.poderLabel} · {a.summary.total} itens
@@ -199,6 +274,43 @@ export function HistoryPanel({ items, portais, openId, onOpen, onChanged, onRemo
                     <FileText />
                     MD
                   </Button>
+                  {a.serigy ? (
+                    <>
+                      <Button type="button" size="xs" variant="ghost" onClick={() => void exportSerigy(a.id)} title="Baixar o JSON do Serigy anexado a esta avaliação">
+                        <ShieldCheck />
+                        Serigy
+                      </Button>
+                      <Button type="button" size="icon-xs" variant="ghost" aria-label="Substituir a avaliação do Serigy" title="Substituir o JSON do Serigy" disabled={busy} onClick={() => pickSerigy(a.id)}>
+                        <Upload />
+                      </Button>
+                      {confirmSerigyId === a.id ? (
+                        <>
+                          <span className="text-xs">Remover Serigy?</span>
+                          <Button type="button" size="xs" variant="destructive" onClick={() => void removeSerigy(a.id)}>
+                            Sim
+                          </Button>
+                          <Button type="button" size="xs" variant="outline" onClick={() => setConfirmSerigyId(null)}>
+                            Não
+                          </Button>
+                        </>
+                      ) : (
+                        <Button type="button" size="icon-xs" variant="ghost" aria-label="Remover a avaliação do Serigy" title="Remover o JSON do Serigy anexado" onClick={() => setConfirmSerigyId(a.id)}>
+                          <ShieldOff />
+                        </Button>
+                      )}
+                    </>
+                  ) : (
+                    <>
+                      <Badge variant="outline" className="text-muted-foreground" title="Nenhuma avaliação do Serigy foi anexada a esta avaliação">
+                        <ShieldOff />
+                        Sem Serigy
+                      </Badge>
+                      <Button type="button" size="xs" variant="ghost" disabled={busy} onClick={() => pickSerigy(a.id)} title="Anexar o JSON baixado do Serigy a esta avaliação">
+                        <Upload />
+                        Anexar Serigy
+                      </Button>
+                    </>
+                  )}
                   <span className="ml-auto flex items-center gap-1.5">
                     {confirmId === a.id ? (
                       <>

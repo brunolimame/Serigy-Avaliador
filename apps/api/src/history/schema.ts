@@ -1,4 +1,4 @@
-import { MAX_EVIDENCE, PODERES, summarize, type EvaluationResult } from '@serigy/shared';
+import { MAX_EVIDENCE, PODERES, SERIGY_CODIGOS, summarize, type EvaluationResult } from '@serigy/shared';
 import { z } from 'zod';
 
 /**
@@ -52,6 +52,13 @@ const itemSchema = z.strictObject({
     .max(200)
     .optional(),
   evidence: z.array(z.strictObject({ pageUrl: httpUrl, snippet: text(1000) })).max(MAX_EVIDENCE),
+  serigy: z
+    .strictObject({
+      ponto: z.boolean(),
+      codigo: z.enum(SERIGY_CODIGOS as [string, ...string[]]).optional(),
+      detalhe: text(4000).optional(),
+    })
+    .optional(),
 });
 
 const sectionSchema = z.strictObject({
@@ -115,6 +122,8 @@ export const envelopeSchema = z.strictObject({
   catalogo: z.strictObject({ geradoEm: text(40) }),
   hash: z.string().regex(/^[0-9a-f]{64}$/, 'hash SHA-256 inválido'),
   resultado: z.unknown(),
+  /** Serigy oficial anexado (versão 2); validado à parte em history/serigy.ts. */
+  serigyOficial: z.unknown().optional(),
 });
 
 const MAX_PROBLEMS = 20;

@@ -50,6 +50,11 @@ const MIGRATIONS: string[] = [
      payload            BLOB NOT NULL
    );
    CREATE INDEX idx_avaliacoes_avaliada_em ON avaliacoes (avaliada_em DESC);`,
+  // v5 – avaliação do validador oficial do Serigy anexada a uma avaliação salva (itens em gzip + resumo para a lista)
+  `ALTER TABLE avaliacoes ADD COLUMN serigy_payload BLOB;
+   ALTER TABLE avaliacoes ADD COLUMN serigy_importado_em TEXT;
+   ALTER TABLE avaliacoes ADD COLUMN serigy_total INTEGER;
+   ALTER TABLE avaliacoes ADD COLUMN serigy_atendidos INTEGER;`,
 ];
 
 /** Abre (e cria, se preciso) o banco e aplica as migrações pendentes. `:memory:` serve para testes. */

@@ -1,4 +1,4 @@
-import { AMBIENTES, analyzedMatchesExpected, compareIds, groupPagesByNumber, MAX_EVIDENCE, splitMessage, summarize, type EvaluationResult, type FetchOrigin, type ItemResult, type ItemStatus, type PageResult, type SectionResult, type Summary } from '@serigy/shared';
+import { AMBIENTES, analyzedMatchesExpected, compareIds, groupPagesByNumber, MAX_EVIDENCE, parseSerigyDetalhe, serigySummarize, splitMessage, summarize, evaluationDuration, type EvaluationResult, type FetchOrigin, type ItemResult, type ItemStatus, type PageResult, type SectionResult, type SerigyOficialItem, type Summary } from '@serigy/shared';
 
 const ICON: Record<ItemStatus, string> = { ok: '✅', warning: '⚠️', empty: '➖', missing: '❌' };
 const LABEL: Record<ItemStatus, string> = {
@@ -105,14 +105,28 @@ function itemDetail(out: string[], p: PageResult, s: SectionResult, i: ItemResul
   out.push('');
 }
 
-/** Gera o relatório de uma avaliação em Markdown. */
-export function renderMarkdown(r: EvaluationResult): string {
+/** Veredito Serigy de um item: estimado pelo avaliador e, se houver, o do Serigy oficial. */
+function serigyCell(i: ItemResult, oficial?: Record<string, SerigyOficialItem>): string {
+  const parts: string[] = [];
+  if (i.serigy) parts.push(`estimado: ${i.serigy.ponto ? '✅' : '❌'}${i.serigy.codigo ? ' ' + code(i.serigy.codigo) : ''}`);
+  const o = oficial?.[i.id];
+  if (o) {
+    const { codigo } = parseSerigyDetalhe(o.detalhe);
+    parts.push(`oficial: ${o.ponto ? '✅' : '❌'}${codigo ? ' ' + code(codigo) : ''}`);
+  }
+  return parts.length ? parts.join('<br>') : '—';
+}
+
+/** Gera o relatório de uma avaliação em Markdown. `oficial` = itens do Serigy oficial pareados (id do avaliador -> item). */
+export function renderMarkdown(r: EvaluationResult, oficial?: Record<string, SerigyOficialItem>): string {
   const out: string[] = [];
   out.push(`# Relatório de avaliação Serigy — PNTP 2026`, '');
   out.push(`- **Portal avaliado:** ${r.portalNome ? `${r.portalNome} — ` : ''}${r.url}`);
   if (r.portalAmbiente) out.push(`- **Ambiente:** ${AMBIENTES.find((a) => a.id === r.portalAmbiente)?.label ?? r.portalAmbiente}`);
   out.push(`- **Poder/esfera:** ${r.poderLabel} (requisitos comuns + específicos)`);
-  out.push(`- **Avaliado em:** ${fmtDate(r.finishedAt)}`);
+  out.push(`- **Iniciada em:** ${fmtDate(r.startedAt)}`);
+  out.push(`- **Terminada em:** ${fmtDate(r.finishedAt)}`);
+  out.push(`- **Duração:** ${evaluationDuration(r) || '—'}`);
   out.push(
     `- **Escopo:** ${r.scope.mode === 'todos' ? 'todos os itens' : 'parcial'} — ${r.scope.items} itens em ${r.scope.pages} páginas da matriz`,
   );
@@ -120,6 +134,17 @@ export function renderMarkdown(r: EvaluationResult): string {
   out.push(`- **Invoker:** ${r.invoker.found ? '✅' : '❌'} ${r.invoker.message}${r.invoker.value ? ` — chave: ${code(r.invoker.value)}` : ''}`, '');
 
   out.push('## Resumo geral', '', ...summaryTable(r.summary), '');
+  const allItems = r.pages.flatMap((p) => p.sections.flatMap((s) => s.items));
+  const estimado = serigySummarize(allItems);
+  if (estimado.total > 0) {
+    out.push(`- **Serigy (estimado):** ${estimado.score}% — ${estimado.atendidos}/${estimado.total} itens pontuariam no validador oficial`);
+  }
+  const pareados = oficial ? Object.values(oficial) : [];
+  if (pareados.length > 0) {
+    const ok = pareados.filter((x) => x.ponto).length;
+    out.push(`- **Serigy (oficial):** ${Math.round((ok / pareados.length) * 1000) / 10}% — ${ok}/${pareados.length} itens pareados`);
+  }
+  if (estimado.total > 0 || pareados.length > 0) out.push('');
   out.push(
     '> Atendimento = (atendidos + serigyEmpty declarados) / total. "serigyEmpty declarado" (motivo informado, válido e único) atende parcialmente e conta no percentual; motivo em branco, inválido ou repetido não atende.',
     '',
@@ -189,10 +214,10 @@ export function renderMarkdown(r: EvaluationResult): string {
       if (s.caminhoUrl) out.push(`Caminho sugerido: ${code(s.caminhoUrl)}`, '');
       for (const n of s.notes) out.push(`> ${n}`);
       if (s.notes.length) out.push('');
-      out.push('| Item | Descrição | Atributo | Tipo | Situação | Detalhe | URL analisada |', '|---|---|---|---|---|---|---|');
+      out.push('| Item | Descrição | Atributo | Tipo | Situação | Serigy | Detalhe | URL analisada |', '|---|---|---|---|---|---|---|---|');
       for (const i of s.items) {
         out.push(
-          `| ${i.id} | ${cell(i.descricao)} | ${code(i.atributo)} | ${cell(i.tipos.join(' / '))} | ${ICON[i.status]} ${LABEL[i.status]} | ${cell(i.message)} | ${analyzedCell(i)} |`,
+          `| ${i.id} | ${cell(i.descricao)} | ${code(i.atributo)} | ${cell(i.tipos.join(' / '))} | ${ICON[i.status]} ${LABEL[i.status]} | ${serigyCell(i, oficial)} | ${cell(i.message)} | ${analyzedCell(i)} |`,
         );
       }
       out.push('');

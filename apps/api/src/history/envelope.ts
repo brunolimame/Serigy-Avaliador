@@ -4,9 +4,11 @@ import {
   EXPORT_VERSION,
   type AvaliacaoEnvelope,
   type EvaluationResult,
+  type SerigyOficial,
 } from '@serigy/shared';
 import { hashResultado } from './canonical';
 import { envelopeSchema, formatIssues, validateResultado } from './schema';
+import { serigyOficialSchema } from './serigy';
 
 let cachedApp: { nome: string; versao: string } | undefined;
 
@@ -24,7 +26,12 @@ export function appInfo(): { nome: string; versao: string } {
 }
 
 /** Monta o arquivo de exportação de uma avaliação (formato `serigy-avaliacao`, versão 1). */
-export function buildEnvelope(resultado: EvaluationResult, catalogoGeradoEm: string, now: Date = new Date()): AvaliacaoEnvelope {
+export function buildEnvelope(
+  resultado: EvaluationResult,
+  catalogoGeradoEm: string,
+  now: Date = new Date(),
+  serigyOficial?: SerigyOficial,
+): AvaliacaoEnvelope {
   return {
     formato: EXPORT_FORMAT,
     versao: EXPORT_VERSION,
@@ -33,6 +40,7 @@ export function buildEnvelope(resultado: EvaluationResult, catalogoGeradoEm: str
     catalogo: { geradoEm: catalogoGeradoEm },
     hash: hashResultado(resultado),
     resultado,
+    ...(serigyOficial ? { serigyOficial } : {}),
   };
 }
 
@@ -67,6 +75,12 @@ export function parseEnvelope(input: unknown, opts: { requireComplete?: boolean 
   if (hashResultado(checked.resultado) !== env.hash) {
     return { ok: false, problemas: ['hash: não confere com o conteúdo; o arquivo foi alterado ou está corrompido'] };
   }
+  let serigyOficial: SerigyOficial | undefined;
+  if (env.serigyOficial !== undefined) {
+    const s = serigyOficialSchema.safeParse(env.serigyOficial);
+    if (!s.success) return { ok: false, problemas: formatIssues(s.error, 'serigyOficial') };
+    serigyOficial = s.data;
+  }
   return {
     ok: true,
     envelope: {
@@ -77,6 +91,7 @@ export function parseEnvelope(input: unknown, opts: { requireComplete?: boolean 
       catalogo: env.catalogo,
       hash: env.hash,
       resultado: checked.resultado,
+      ...(serigyOficial ? { serigyOficial } : {}),
     },
   };
 }

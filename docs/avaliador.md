@@ -160,8 +160,8 @@ todo o histórico (Configurações › Histórico, com confirmação).
 - **Abrir:** a avaliação aberta do histórico mostra data/hora e todos os detalhes, mas é **somente leitura** (sem
   Reavaliar item/grupo). Para reavaliar, faz-se uma nova avaliação.
 - **Exportar:** JSON importável (envelope abaixo) e relatório Markdown (o mesmo de `/api/report`).
-- **Envelope JSON** (`formato: "serigy-avaliacao"`, `versao: 1`): `exportadoEm`, `app {nome, versao}`,
-  `catalogo {geradoEm}`, `hash` e `resultado`. Mudança incompatível = nova `versao` (EXPORT_VERSION no shared); arquivos de
+- **Envelope JSON** (`formato: "serigy-avaliacao"`, `versao: 2`): `exportadoEm`, `app {nome, versao}`,
+  `catalogo {geradoEm}`, `hash`, `resultado` e, se houver, `serigyOficial` (fora do hash; ver "Veredito Serigy"). A versão 1 continua importável. Mudança incompatível = nova `versao` (EXPORT_VERSION no shared); arquivos de
   versão mais nova são recusados.
 - **Importar (somente JSON):** a API valida, nesta ordem, (1) estrutura do envelope sem chaves desconhecidas, (2) formato,
   (3) versão, (4) o resultado inteiro com **zod estrito** (tipos, enums, limites de tamanho, URLs http(s), ids de item) e
@@ -170,10 +170,49 @@ todo o histórico (Configurações › Histórico, com confirmação).
   `origem: "importada"`. Se o portal da URL não está cadastrado, a UI oferece cadastrá-lo.
 - **Limite do hash:** detecta arquivo corrompido ou editado à mão, **não prova autoria** (quem edita pode recalcular o
   hash). Assinatura digital é uma opção futura (ver `DISTRIBUICAO.md`).
-- **API:** `GET /api/avaliacoes`, `GET /api/avaliacoes/:id`, `POST /api/avaliacoes` (salvar o resultado atual),
+- **API:** `PUT|GET|DELETE /api/avaliacoes/:id/serigy` (anexar/substituir, baixar, remover o JSON do Serigy), `GET /api/avaliacoes`, `GET /api/avaliacoes/:id`, `POST /api/avaliacoes` (salvar o resultado atual),
   `DELETE /api/avaliacoes/:id`, `DELETE /api/avaliacoes?confirmar=sim`, `GET /api/avaliacoes/:id/exportar?formato=json|md`,
   `POST /api/avaliacoes/exportar` (envelope do resultado atual, salvo ou não), `POST /api/avaliacoes/importar`.
   O corpo JSON aceita até 30 MB.
+
+## Marcação de tempo
+
+O resultado traz `startedAt` e `finishedAt`. A UI mostra, abaixo do título "Resultado", quando a avaliação **iniciou**, quando
+**terminou** e a **duração** (durante a análise, só o início e "em andamento"); o relatório Markdown traz as mesmas três
+linhas (fuso America/Maceio). Código: `formatDuration`/`evaluationDuration` em `packages/shared`.
+
+## Veredito Serigy (estimado e oficial)
+
+O `status` do avaliador (`ok`, `warning`, `empty`, `missing`) e todos os detalhes seguem a matriz. Ao lado dele, cada
+item traz `serigy: { ponto, codigo?, detalhe? }` — o veredito **estimado** de como o validador oficial do TCE-SE
+pontuaria o item (`ponto` = pontua ou não; `codigo` = `URL_NOT_ACCESSIBLE`, `SCHEMA_NOT_FOUND`, `SERIGYITEM_NOT_FOUND`,
+`SERIGYITEM_NOT_VALID` ou `WAITSECTION_NOT_FOUND`). Código: `veredito()` em `evaluator/evaluate.ts`. Regras:
+
+- `ok` e `empty` pontuam; `missing` não (código conforme a causa: página/iframe inacessível, schema ou item ausente).
+- `warning` por **valor fora do tipo** ou **só `<th>`** pontua (o validador oficial não reprova por isso); `warning` por
+  schema que não confere ou `serigyEmpty` inválido não pontua.
+- **`historicoExercicio`** só pontua com `serigyItem="historicoExercicio"` e um `serigyExecuteWaitSection` no filtro
+  (`serigyItem="filtroPesquisa"`) que o contém; o atalho "select de anos" do avaliador **não** pontua
+  (`WAITSECTION_NOT_FOUND`). Sem `serigyLoadSection` de mesmo valor no HTML carregado, pontua com aviso (ele pode surgir
+  após o clique).
+- **Desvios do validador oficial** (`SERIGY_SCHEMA_QUIRKS` em `packages/shared`): hoje, a seção 25 (Atividades
+  Finalísticas dos consórcios) é procurada como `consorcio/…` (singular), e a matriz publica `consorcios/…`. Com a
+  configuração `comportamento.compatibilidadeSerigy` ligada (padrão), o item não pontua (`SCHEMA_NOT_FOUND`); desligada,
+  só ganha um aviso no `detalhe`. O `status` não muda e a matriz não é alterada.
+- Ficaram **fora** (hipóteses a confirmar com o TCE-SE): `Link` com o `href` só no `<a>` filho (2.2.1), `Texto` vazio em
+  uma das ocorrências (1.2) e a avaliação de Acessibilidade na página do `/erro` (13.x).
+
+Na UI, o resultado mostra "Serigy estimado" (percentual e n/total) no topo e no selo de página, grupo e seção, e um
+selo por item. Em avaliações **antigas** do histórico (sem o campo) nada é mostrado.
+
+**Serigy oficial no histórico.** Na lista do histórico, "Anexar Serigy" aceita o JSON baixado do Serigy (lista de
+`{dimensao, itemId, serigyItem, serigySchema, ponto, detalhe}`), validado com zod estrito (`history/serigy.ts`). Fica na
+própria avaliação (migração v5: `serigy_payload` em gzip + `serigy_total`/`serigy_atendidos`), fora do hash do resultado.
+Os itens são pareados por número + `serigyItem`; na falta, por dimensão (caminho da seção) + `serigyItem`, porque o
+Serigy omite alguns itens e a numeração se desloca (ex.: Receitas). Ao abrir a avaliação, cada item mostra o veredito
+oficial junto do estimado (com aviso quando divergem), e o resumo ganha "Serigy oficial". A lista mostra o percentual do
+Serigy ou "Sem Serigy", com botões para baixar (mesmo formato do Serigy), substituir e remover. O JSON exportado
+(`versao: 2`) e o relatório Markdown incluem o Serigy anexado.
 
 ## Navegador embutido (renderização de páginas reativas)
 
@@ -303,7 +342,8 @@ Status de cada item:
   do próprio resultado (atendido, atenção, serigyEmpty declarado, não encontrado), pois cada item é atendido ou não.
 - **Histórico (`historicoExercicio`)**: o avaliador não verifica os 3 anos; se o schema da página tem um filtro por
   ano (um `<select>` dentro do schema com opções `20xx`), o item é dado como **atendido**, mesmo sem
-  `serigyItem="historicoExercicio"` próprio (`YearFilter` em `markup.ts`, regra em `evaluate.ts`).
+  `serigyItem="historicoExercicio"` próprio (`YearFilter` em `markup.ts`, regra em `evaluate.ts`). Já o **veredito
+  Serigy** do item é mais rígido (ver abaixo).
 - **`serigyLink`** vale em **qualquer tag** (`iframe`, `a`, `div`, `section`, `span`, `button`, `meta`, `link`…): sempre que o
   atributo é informado numa página analisada, a URL é baixada e avaliada (`markup.ts` captura `[serigylink]` sem filtrar
   por elemento). Segue `definicoes.md`:

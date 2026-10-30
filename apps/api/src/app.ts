@@ -18,6 +18,7 @@ import {
 import { HttpError } from './errors';
 import { buildEnvelope, exportFileName, parseEnvelope } from './history/envelope';
 import { validateResultado } from './history/schema';
+import { parseSerigyArquivo } from './history/serigy';
 import { evaluate, EvaluationError, prepareEvaluation, type EvaluateDeps, type PreparedEvaluation } from './evaluator/evaluate';
 import { renderMarkdown } from './report/markdown';
 
@@ -31,6 +32,7 @@ const evaluationSchema = z.object({
   maxPages: z.number().int().min(1).max(200).optional(),
   tryDocumentedCase: z.boolean().optional(),
   renderer: z.enum(['browser', 'http']).optional(),
+  compatibilidadeSerigy: z.boolean().optional(),
   portalNome: z.string().max(120).optional(),
   portalAmbiente: z.enum(['producao', 'desenvolvimento']).optional(),
 });
@@ -99,13 +101,18 @@ export function createApp(deps: AppDeps = {}) {
   const settings = () => deps.settings ?? defaultSettings();
 
   /** Os campos que a requisição não informa vêm das configurações gerais da aplicação. */
-  const withSettings = <T extends { maxPages?: number; tryDocumentedCase?: boolean; renderer?: 'browser' | 'http' }>(req: T): T => {
+  const withSettings = <
+    T extends { maxPages?: number; tryDocumentedCase?: boolean; renderer?: 'browser' | 'http'; compatibilidadeSerigy?: boolean },
+  >(
+    req: T,
+  ): T => {
     const v = settings().values();
     return {
       ...req,
       maxPages: req.maxPages ?? (v['comportamento.maxPaginasSerigyLink'] as number),
       tryDocumentedCase: req.tryDocumentedCase ?? (v['comportamento.testarGrafiaDocumentacao'] as boolean),
       renderer: req.renderer ?? (v['comportamento.navegador'] ? 'browser' : 'http'),
+      compatibilidadeSerigy: req.compatibilidadeSerigy ?? (v['comportamento.compatibilidadeSerigy'] as boolean),
     };
   };
 
@@ -170,7 +177,9 @@ export function createApp(deps: AppDeps = {}) {
     try {
       const parsed = parseEnvelope(req.body);
       if (!parsed.ok) throw new HistoryError('Arquivo de avaliação inválido', 400, { problemas: parsed.problemas });
-      res.status(201).json(avaliacoes().save(parsed.envelope.resultado, 'importada', parsed.envelope.catalogo.geradoEm));
+      res
+        .status(201)
+        .json(avaliacoes().save(parsed.envelope.resultado, 'importada', parsed.envelope.catalogo.geradoEm, parsed.envelope.serigyOficial));
     } catch (err) {
       next(err);
     }
@@ -219,13 +228,56 @@ export function createApp(deps: AppDeps = {}) {
       if (!detalhe) throw new HistoryError('Avaliação não encontrada', 404);
       const name = exportFileName(detalhe.resultado, id, formato);
       if (formato === 'md') {
-        res.attachment(name).type('text/markdown; charset=utf-8').send(renderMarkdown(detalhe.resultado));
+        res.attachment(name).type('text/markdown; charset=utf-8').send(renderMarkdown(detalhe.resultado, detalhe.serigyPorItem));
       } else {
         res
           .attachment(name)
           .type('application/json')
-          .send(JSON.stringify(buildEnvelope(detalhe.resultado, detalhe.catalogoGeradoEm ?? catalogDate()), null, 2));
+          .send(JSON.stringify(buildEnvelope(detalhe.resultado, detalhe.catalogoGeradoEm ?? catalogDate(), undefined, detalhe.serigyOficial), null, 2));
       }
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  // Avaliação do validador oficial do Serigy anexada a uma avaliação salva: anexar/substituir (corpo = JSON do Serigy),
+  // baixar o JSON no formato do Serigy e remover.
+  app.put('/api/avaliacoes/:id/serigy', (req, res, next) => {
+    try {
+      const id = avaliacaoId(req.params.id);
+      const parsed = parseSerigyArquivo(req.body);
+      if (!parsed.ok) throw new HistoryError('Arquivo do Serigy inválido', 400, { problemas: parsed.problemas });
+      avaliacoes().setSerigy(id, parsed.itens);
+      const detalhe = avaliacoes().get(id);
+      if (!detalhe) throw new HistoryError('Avaliação não encontrada', 404);
+      res.json(detalhe);
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  app.delete('/api/avaliacoes/:id/serigy', (req, res, next) => {
+    try {
+      const id = avaliacaoId(req.params.id);
+      avaliacoes().clearSerigy(id);
+      const detalhe = avaliacoes().get(id);
+      if (!detalhe) throw new HistoryError('Avaliação não encontrada', 404);
+      res.json(detalhe);
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  app.get('/api/avaliacoes/:id/serigy', (req, res, next) => {
+    try {
+      const id = avaliacaoId(req.params.id);
+      const detalhe = avaliacoes().get(id);
+      if (!detalhe) throw new HistoryError('Avaliação não encontrada', 404);
+      if (!detalhe.serigyOficial) throw new HistoryError('Esta avaliação não tem a avaliação do Serigy anexada', 404);
+      res
+        .attachment(exportFileName(detalhe.resultado, id, 'json').replace(/^avaliacao-/, 'serigy-'))
+        .type('application/json')
+        .send(JSON.stringify(detalhe.serigyOficial.itens, null, 2));
     } catch (err) {
       next(err);
     }

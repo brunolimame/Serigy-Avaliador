@@ -12,12 +12,13 @@ import {
   Frame,
   Loader2,
   RefreshCw,
+  ShieldCheck,
   TriangleAlert,
   X,
   type LucideIcon,
 } from 'lucide-react';
-import type { EvaluationResult, ItemResult, ItemStatus, PageResult, SectionResult, Summary } from '@serigy/shared';
-import { analyzedMatchesExpected, groupPagesByNumber, MAX_EVIDENCE, summarize } from '@serigy/shared';
+import type { EvaluationResult, ItemResult, ItemStatus, PageResult, SectionResult, SerigyOficialItem, SerigySummary, Summary } from '@serigy/shared';
+import { analyzedMatchesExpected, evaluationDuration, groupPagesByNumber, MAX_EVIDENCE, parseSerigyDetalhe, serigySummarize, summarize } from '@serigy/shared';
 import { api, download } from '../api';
 import { SCORE_STYLE, scoreTone, type ScoreTone } from '../score';
 import { displayWait, groupIconState, pendingIconKind } from '../status-icons';
@@ -111,9 +112,54 @@ function Stat({ label, value, icon: Icon, color }: { label: string; value: strin
   );
 }
 
-function SummaryStats({ s }: { s: Summary }) {
+/** Resumo Serigy de uma lista de itens: o oficial (itens pareados) quando o arquivo dele foi anexado; senão, o estimado. */
+function serigyOf(items: ItemResult[], oficial?: Record<string, SerigyOficialItem>): SerigySummary & { oficial: boolean } {
+  if (oficial) {
+    const pares = items.map((i) => oficial[i.id]).filter((p): p is SerigyOficialItem => Boolean(p));
+    const atendidos = pares.filter((p) => p.ponto).length;
+    return { total: pares.length, atendidos, score: pares.length === 0 ? 0 : Math.round((atendidos / pares.length) * 1000) / 10, oficial: true };
+  }
+  return { ...serigySummarize(items), oficial: false };
+}
+
+const fmtTime = (iso: string) => new Date(iso).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'medium' });
+
+/** Marcação de tempo da avaliação: quando iniciou, quando terminou e quanto tempo levou (durante a análise, só o início). */
+function EvaluationTiming({ result, live }: { result: EvaluationResult; live: boolean }) {
   return (
-    <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
+    <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground" aria-label="Marcação de tempo da avaliação">
+      <Clock className="size-3.5" aria-hidden />
+      <span>
+        Iniciou em <strong className="font-medium text-foreground tabular-nums">{fmtTime(result.startedAt)}</strong>
+      </span>
+      {live ? (
+        <span>em andamento…</span>
+      ) : (
+        <>
+          <span>
+            Terminou em <strong className="font-medium text-foreground tabular-nums">{fmtTime(result.finishedAt)}</strong>
+          </span>
+          <span>
+            Duração <strong className="font-medium text-foreground tabular-nums">{evaluationDuration(result) || '—'}</strong>
+          </span>
+        </>
+      )}
+    </div>
+  );
+}
+
+const GRID_COLS: Record<number, string> = {
+  6: 'xl:grid-cols-6',
+  7: 'xl:grid-cols-7',
+  8: 'xl:grid-cols-8',
+};
+
+function SummaryStats({ s, items, oficial }: { s: Summary; items: ItemResult[]; oficial?: Record<string, SerigyOficialItem> }) {
+  const estimado = serigySummarize(items);
+  const off = oficial ? serigyOf(items, oficial) : undefined;
+  const extras = (estimado.total > 0 ? 1 : 0) + (off && off.total > 0 ? 1 : 0);
+  return (
+    <div className={cn('grid grid-cols-2 gap-3 md:grid-cols-4', GRID_COLS[6 + extras])}>
       <Stat
         label="Atendimento"
         value={`${s.score}%`}
@@ -125,6 +171,22 @@ function SummaryStats({ s }: { s: Summary }) {
       <Stat label="Atenção" value={s.warning} icon={TriangleAlert} color="text-amber-700 dark:text-amber-300" />
       <Stat label="serigyEmpty declarados" value={s.empty} icon={CircleMinus} color="text-sky-700 dark:text-sky-300" />
       <Stat label="Não encontrados" value={s.missing} icon={CircleX} color="text-rose-700 dark:text-rose-300" />
+      {estimado.total > 0 && (
+        <Stat
+          label={`Serigy estimado · ${estimado.atendidos}/${estimado.total}`}
+          value={`${estimado.score}%`}
+          icon={ShieldCheck}
+          color={SCORE_STYLE[scoreTone(estimado.score)].text}
+        />
+      )}
+      {off && off.total > 0 && (
+        <Stat
+          label={`Serigy oficial · ${off.atendidos}/${off.total}`}
+          value={`${off.score}%`}
+          icon={ShieldCheck}
+          color={SCORE_STYLE[scoreTone(off.score)].text}
+        />
+      )}
     </div>
   );
 }
@@ -172,7 +234,7 @@ const SCORE_ICON: Record<ScoreTone, { icon: LucideIcon; className: string; label
  * Selos do atendimento: percentual (< 40% vermelho, de 40% a < 100% amarelo, 100% verde) e, quando existirem,
  * um contador separado e com a cor própria para parcialmente atendidos (serigyEmpty) e não atendidos (atenção + não encontrado).
  */
-function ScoreBadge({ summary }: { summary: Summary }) {
+function ScoreBadge({ summary, serigy }: { summary: Summary; serigy?: SerigySummary & { oficial: boolean } }) {
   const tone = SCORE_STYLE[scoreTone(summary.score)];
   const unmet = summary.warning + summary.missing;
   const counter = (status: ItemStatus, count: number, label: string) => {
@@ -197,15 +259,74 @@ function ScoreBadge({ summary }: { summary: Summary }) {
       </Badge>
       {summary.empty > 0 && counter('empty', summary.empty, 'parcialmente atendido(s)')}
       {unmet > 0 && counter('missing', unmet, 'não atendido(s)')}
+      {serigy && serigy.total > 0 && (
+        <Badge
+          variant='outline'
+          className={cn('font-medium tabular-nums', SCORE_STYLE[scoreTone(serigy.score)].badge)}
+          title={`Serigy ${serigy.oficial ? 'oficial' : 'estimado'}: ${serigy.atendidos} de ${serigy.total} item(ns) pontuam`}
+          aria-label={`Serigy ${serigy.oficial ? 'oficial' : 'estimado'}: ${serigy.score}%, ${serigy.atendidos} de ${serigy.total}`}
+        >
+          <ShieldCheck aria-hidden />
+          Serigy {serigy.score}% · {serigy.atendidos}/{serigy.total}
+        </Badge>
+      )}
     </span>
   );
 }
 
 /** Percentual da seção; só aparece quando todos os itens dela já têm resultado. */
-function SectionScore({ items, pending, busy }: { items: ItemResult[]; pending?: Map<string, PendingState>; busy?: Set<string> }) {
+function SectionScore({
+  items,
+  pending,
+  busy,
+  oficial,
+}: {
+  items: ItemResult[];
+  pending?: Map<string, PendingState>;
+  busy?: Set<string>;
+  oficial?: Record<string, SerigyOficialItem>;
+}) {
   const finished = items.filter((i) => !pending?.has(i.id) && !busy?.has(i.id));
   if (items.length === 0 || finished.length < items.length) return null;
-  return <ScoreBadge summary={summarize(finished)} />;
+  return <ScoreBadge summary={summarize(finished)} serigy={serigyOf(finished, oficial)} />;
+}
+
+/** Selo do veredito Serigy (atende ou não, com o código do erro). */
+function SerigyChip({ ponto, codigo, label }: { ponto: boolean; codigo?: string; label: string }) {
+  return (
+    <Badge
+      variant="outline"
+      className={cn(
+        'font-medium',
+        ponto
+          ? 'border-emerald-300 bg-emerald-100 text-emerald-800 dark:border-emerald-800 dark:bg-emerald-900/50 dark:text-emerald-200'
+          : 'border-rose-300 bg-rose-100 text-rose-800 dark:border-rose-800 dark:bg-rose-900/50 dark:text-rose-200',
+      )}
+    >
+      {ponto ? <CircleCheck /> : <CircleX />}
+      {label}: {ponto ? 'pontua' : 'não pontua'}
+      {codigo ? ` · ${codigo}` : ''}
+    </Badge>
+  );
+}
+
+/** Veredito Serigy do item como informação adicional: o oficial (arquivo anexado) e o estimado pelo avaliador. */
+function SerigyLine({ item, oficial }: { item: ItemResult; oficial?: SerigyOficialItem }) {
+  if (!item.serigy && !oficial) return null;
+  const off = oficial ? parseSerigyDetalhe(oficial.detalhe) : undefined;
+  const diverge = Boolean(oficial && item.serigy && oficial.ponto !== item.serigy.ponto);
+  return (
+    <div className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
+      <span>Serigy:</span>
+      {oficial && <SerigyChip ponto={oficial.ponto} codigo={off?.codigo} label="oficial" />}
+      {item.serigy && <SerigyChip ponto={item.serigy.ponto} codigo={item.serigy.codigo} label="estimado" />}
+      {diverge && (
+        <Badge variant="outline" className="border-amber-300 bg-amber-100 text-amber-900 dark:border-amber-800 dark:bg-amber-900/50 dark:text-amber-200">
+          estimado diverge do oficial
+        </Badge>
+      )}
+    </div>
+  );
 }
 
 /** Selo do status do schema (verde = confere, rosa = não confere); o mesmo na linha do item e nos detalhes. */
@@ -295,7 +416,7 @@ function FoundOccurrences({ item, compact }: { item: ItemResult; compact?: boole
 /** Há lista de ocorrências no lugar do texto de contagem? (só quando a mensagem traz a contagem e há evidências) */
 const hasFoundList = (item: ItemResult) => item.evidence.length > 0 && splitMessage(item.message).some(isFoundPart);
 
-function ItemDetails({ item, page, section }: { item: ItemResult; page: PageResult; section: SectionResult }) {
+function ItemDetails({ item, page, section, oficial }: { item: ItemResult; page: PageResult; section: SectionResult; oficial?: SerigyOficialItem }) {
   return (
     <div className="space-y-2 rounded-lg border bg-white/70 p-3 text-xs dark:bg-black/20">
       <div>
@@ -320,6 +441,30 @@ function ItemDetails({ item, page, section }: { item: ItemResult; page: PageResu
         />
         {hasFoundList(item) && <FoundOccurrences item={item} />}
       </div>
+      {(item.serigy || oficial) && (
+        <div>
+          <strong>Serigy:</strong>
+          <ul className="mt-1 list-disc space-y-0.5 pl-5">
+            {oficial && (
+              <li className="break-words">
+                Oficial: {oficial.ponto ? 'pontua' : 'não pontua'}
+                {oficial.detalhe ? ` — ${oficial.detalhe.replace('|', ': ')}` : ''}
+                <span className="text-muted-foreground">
+                  {' '}
+                  (item {oficial.itemId} · {oficial.dimensao})
+                </span>
+              </li>
+            )}
+            {item.serigy && (
+              <li className="break-words">
+                Estimado: {item.serigy.ponto ? 'pontua' : 'não pontua'}
+                {item.serigy.codigo ? ` — ${item.serigy.codigo}` : ''}
+                {item.serigy.detalhe ? `: ${item.serigy.detalhe}` : ''}
+              </li>
+            )}
+          </ul>
+        </div>
+      )}
       <div>
         <strong>Esperado:</strong> <MessageParts text={item.expected} />
       </div>
@@ -413,9 +558,11 @@ interface Props {
   actions?: ReactNode;
   /** Estado do Invoker durante a análise (ainda sem resultado): sendo verificado ou não analisado. */
   invokerWait?: PendingState;
+  /** Itens do Serigy oficial anexados à avaliação do histórico (id do item do avaliador -> item do Serigy). */
+  serigyOficial?: Record<string, SerigyOficialItem>;
 }
 
-export function ResultView({ result, onChange, pending, progress, onCancel, readOnly, banner, actions, invokerWait: invokerWaitProp }: Props) {
+export function ResultView({ result, onChange, pending, progress, onCancel, readOnly, banner, actions, invokerWait: invokerWaitProp, serigyOficial }: Props) {
   const isLive = pending !== undefined;
   const running = onCancel !== undefined;
   const lastFetched = result.fetched.at(-1);
@@ -567,6 +714,7 @@ export function ResultView({ result, onChange, pending, progress, onCancel, read
           </Button>
         </div>
       </div>
+      <EvaluationTiming result={result} live={isLive} />
       {banner}
       {/* Identificação do portal e do ambiente (produção/desenvolvimento) */}
       {(result.portalNome || result.portalAmbiente) && (
@@ -629,7 +777,7 @@ export function ResultView({ result, onChange, pending, progress, onCancel, read
         </Card>
       )}
 
-      <SummaryStats s={result.summary} />
+      <SummaryStats s={result.summary} items={result.pages.flatMap((p) => p.sections.flatMap((s) => s.items)).filter((i) => !pending?.has(i.id))} oficial={serigyOficial} />
       </div>
 
       {result.warnings.length > 0 && (
@@ -799,7 +947,7 @@ export function ResultView({ result, onChange, pending, progress, onCancel, read
                   ) : pendingCount > 0 ? (
                     `${allItems.length - pendingCount}/${allItems.length} concluídos`
                   ) : (
-                    <ScoreBadge summary={summary} />
+                    <ScoreBadge summary={summary} serigy={serigyOf(allItems.filter((i) => !pending?.has(i.id)), serigyOficial)} />
                   )}
                 </span>
                 {!isLive && noSchema.length > 0 && (
@@ -842,7 +990,7 @@ export function ResultView({ result, onChange, pending, progress, onCancel, read
                       <div>
                         <h3 className="flex flex-wrap items-center gap-2 text-sm font-semibold">
                           {s.id}. {s.title}
-                          <SectionScore items={page.sections.find((x) => x.id === s.id)?.items ?? []} pending={pending} busy={busyIds} />
+                          <SectionScore items={page.sections.find((x) => x.id === s.id)?.items ?? []} pending={pending} busy={busyIds} oficial={serigyOficial} />
                         </h3>
                         {s.notes.map((n) => (
                           <p key={n} className="text-xs text-muted-foreground">
@@ -915,6 +1063,7 @@ export function ResultView({ result, onChange, pending, progress, onCancel, read
                                   <div className="break-all text-xs text-muted-foreground">
                                     URL analisada: <UrlMatchBadge item={i} /> <UrlList urls={i.analyzedUrls} />
                                   </div>
+                                  <SerigyLine item={i} oficial={serigyOficial?.[i.id]} />
 
                                   {/* Alerta do iframe junto do item que depende dele */}
                                   {iframes.map((v) => {
@@ -966,7 +1115,7 @@ export function ResultView({ result, onChange, pending, progress, onCancel, read
                               {hasDetails && (
                                 <CollapsibleContent>
                                   <div className="mt-3">
-                                    <ItemDetails item={i} page={page} section={s} />
+                                    <ItemDetails item={i} page={page} section={s} oficial={serigyOficial?.[i.id]} />
                                   </div>
                                 </CollapsibleContent>
                               )}
