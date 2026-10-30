@@ -49,9 +49,11 @@ describe('filtro por ano => histórico atendido', () => {
   const html = `<div serigySchema="${SCHEMA}" serigyItem="filtroPesquisa">
       <select><option serigyValue="2026">2026</option><option serigyValue="2025">2025</option><option>2024</option></select>
     </div>`;
-  it('marca historicoExercicio como ok mesmo sem serigyItem próprio', async () => {
+  it('reconhece historicoExercicio pelo filtro de anos mesmo sem serigyItem próprio, mas com atenção (o Serigy não pontua)', async () => {
     const i = find(await run(new FakeLoader({ [P]: '<html/>', [D]: html }), { items: ['4.1.18'] }), '4.1.18');
-    expect(i.status).toBe('ok');
+    expect(i.status).toBe('warning');
+    expect(i.message).toContain('Atenção: o Serigy estimado não pontua este item (WAITSECTION_NOT_FOUND)');
+    expect(i.serigy?.ponto).toBe(false);
     expect(i.message).toContain('2026, 2025, 2024');
     expect(i.analyzedUrls).toEqual([D]);
   });

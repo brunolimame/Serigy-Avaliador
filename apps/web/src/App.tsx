@@ -10,6 +10,7 @@ import type {
   Portal,
   SettingsResponse,
 } from '@serigy/shared';
+import { applySerigyOficial } from '@serigy/shared';
 import { api, ApiError } from './api';
 import { AmbienteBadge } from './components/AmbienteBadge';
 import { formatDateTime, HistoryPanel } from './components/HistoryPanel';
@@ -69,6 +70,8 @@ export function App() {
   const [historico, setHistorico] = useState<AvaliacaoResumo[]>([]);
   // Avaliação aberta a partir do histórico (somente leitura); tem precedência sobre o resultado atual na coluna direita.
   const [opened, setOpened] = useState<AvaliacaoDetalhe | null>(null);
+  // Avaliação aberta com o Serigy oficial aplicado: item atendido que o oficial não pontua vira "Atenção"
+  const openedResult = useMemo(() => (opened ? applySerigyOficial(opened.resultado, opened.serigyPorItem) : null), [opened]);
   const [saveState, setSaveState] = useState<SaveState>('idle');
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
   const [duplicateId, setDuplicateId] = useState<number | null>(null);
@@ -532,7 +535,7 @@ export function App() {
           {opened ? (
             <ResultView
               key={opened.resumo.id}
-              result={opened.resultado}
+              result={openedResult!}
               onChange={() => undefined}
               readOnly
               serigyOficial={opened.serigyPorItem}

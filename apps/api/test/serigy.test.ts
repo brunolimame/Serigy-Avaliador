@@ -1,6 +1,6 @@
 import type { Server } from 'node:http';
 import { afterEach, beforeAll, describe, expect, it } from 'vitest';
-import { evaluationDuration, formatDuration, serigySummarize, type EvaluationResult, type SerigyOficialItem } from '@serigy/shared';
+import { applySerigyOficial, evaluationDuration, formatDuration, serigySummarize, type EvaluationResult, type SerigyOficialItem } from '@serigy/shared';
 import { createApp } from '../src/app';
 import { AvaliacoesRepo, PortaisRepo, SettingsRepo } from '../src/db';
 import { openDatabase } from '../src/db/database';
@@ -35,16 +35,17 @@ describe('veredito Serigy — historicoExercicio', () => {
     expect(i.serigy?.detalhe).toContain('serigyLoadSection');
   });
 
-  it('select com serigyItem mas sem serigyExecuteWaitSection: o avaliador aprova e o Serigy não', async () => {
+  it('select com serigyItem mas sem serigyExecuteWaitSection: o Serigy não pontua e o item vira Atenção', async () => {
     const i = find(await run(new FakeLoader({ [P]: '<html/>', [D]: filtro(`${select}<button>Buscar</button>`) }), { items: ['4.1.18'] }), '4.1.18');
-    expect(i.status).toBe('ok');
+    expect(i.status).toBe('warning');
+    expect(i.message).toContain('Atenção: o Serigy estimado não pontua este item');
     expect(i.serigy).toMatchObject({ ponto: false, codigo: 'WAITSECTION_NOT_FOUND' });
   });
 
-  it('só um select de anos (atalho do avaliador) não pontua', async () => {
+  it('só um select de anos (atalho do avaliador) não pontua e o item vira Atenção', async () => {
     const html = filtro('<select><option serigyValue="2026">2026</option><option>2025</option></select>');
     const i = find(await run(new FakeLoader({ [P]: '<html/>', [D]: html }), { items: ['4.1.18'] }), '4.1.18');
-    expect(i.status).toBe('ok');
+    expect(i.status).toBe('warning');
     expect(i.serigy).toMatchObject({ ponto: false, codigo: 'WAITSECTION_NOT_FOUND' });
   });
 });
@@ -100,15 +101,16 @@ describe('veredito Serigy — schema da seção 25 (consorcios × consorcio)', (
   const go = (extra: Partial<Parameters<typeof evaluate>[0]> = {}) =>
     evaluate({ url: P, poder: 'consorcios-publicos', items: ['25.2.1'], ...extra }, { loader: new FakeLoader({ [P]: '<html/>', [E]: html }) });
 
-  it('com a compatibilidade (padrão) o avaliador aprova e o Serigy não', async () => {
+  it('com a compatibilidade (padrão) o Serigy não pontua e o item vira Atenção', async () => {
     const i = find(await go(), '25.2.1');
-    expect(i.status).toBe('ok');
+    expect(i.status).toBe('warning');
     expect(i.serigy).toMatchObject({ ponto: false, codigo: 'SCHEMA_NOT_FOUND' });
     expect(i.serigy?.detalhe).toContain('/consorcio/atividades-finalisticas.html');
   });
 
-  it('sem a compatibilidade só avisa', async () => {
+  it('sem a compatibilidade só avisa e o item continua atendido', async () => {
     const i = find(await go({ compatibilidadeSerigy: false }), '25.2.1');
+    expect(i.status).toBe('ok');
     expect(i.serigy?.ponto).toBe(true);
     expect(i.serigy?.detalhe).toContain('/consorcio/atividades-finalisticas.html');
   });
@@ -271,6 +273,34 @@ describe('API do Serigy oficial', () => {
     expect((await put(`${base}/api/avaliacoes/9999/serigy`, [])).status).toBe(400);
     const itens = [{ dimensao: 'D', itemId: '4.1.1', serigyItem: 'a', serigySchema: SCHEMA, ponto: true, detalhe: null }];
     expect((await put(`${base}/api/avaliacoes/9999/serigy`, itens)).status).toBe(404);
+  });
+});
+
+describe('Serigy oficial: atendido que não pontua vira Atenção', () => {
+  it('altera só a visão, recalcula os resumos e mantém o resultado guardado', async () => {
+    const html = `<table serigySchema="${SCHEMA}"><tr><td serigyItem="valorEmpenhado">1,00</td></tr></table>`;
+    const r = await run(new FakeLoader({ [P]: '<html/>', [D]: html }), { items: ['4.1.1', '4.1.2'] });
+    expect(find(r, '4.1.1').status).toBe('ok');
+    const par = (ponto: boolean, detalhe: string | null): SerigyOficialItem => ({
+      dimensao: 'Despesas',
+      itemId: '4.1.1',
+      serigyItem: 'valorEmpenhado',
+      serigySchema: SCHEMA,
+      ponto,
+      detalhe,
+    });
+    expect(applySerigyOficial(r, undefined)).toBe(r);
+    expect(applySerigyOficial(r, { '4.1.1': par(true, null) })).toBe(r); // o oficial pontua: nada muda
+
+    const v = applySerigyOficial(r, { '4.1.1': par(false, 'SERIGYITEM_NOT_VALID|x') });
+    const item = find(v, '4.1.1');
+    expect(item.status).toBe('warning');
+    expect(item.message).toContain('Atenção: o Serigy oficial não pontua este item (SERIGYITEM_NOT_VALID)');
+    expect(v.summary.ok).toBe(r.summary.ok - 1);
+    expect(v.summary.warning).toBe(r.summary.warning + 1);
+    expect(v.pages.flatMap((p) => p.summary.ok).reduce((a, b) => a + b, 0)).toBe(v.summary.ok);
+    expect(find(r, '4.1.1').status).toBe('ok'); // original intacto
+    expect(renderMarkdown(r, { '4.1.1': par(false, 'SERIGYITEM_NOT_VALID|x') })).toContain('Atenção: o Serigy oficial não pontua');
   });
 });
 

@@ -13,7 +13,7 @@ import type {
   SerigyVeredito,
   StreamEvent,
 } from '@serigy/shared';
-import { DEFAULT_MAX_PAGES, MAX_EVIDENCE, SERIGY_SCHEMA_QUIRKS, summarize } from '@serigy/shared';
+import { DEFAULT_MAX_PAGES, MAX_EVIDENCE, SERIGY_SCHEMA_QUIRKS, summarize, withSerigyEstimadoAtencao } from '@serigy/shared';
 import { getPoder, loadCatalog, pagesForPoder } from '../catalog/load';
 import { describeExpected, validateType } from './checks';
 import { lowerPath, PageStore, urlKey } from './collector';
@@ -112,7 +112,8 @@ function evaluateItem(
   ctx: Context,
   compat = false,
 ): ItemResult {
-  const result = evaluateCore(item, sectionId, page, scope, ctx, compat);
+  // Atendido, mas o Serigy não pontuaria: vira "Atenção" (o veredito detalhado fica em `serigy`).
+  const result = withSerigyEstimadoAtencao(evaluateCore(item, sectionId, page, scope, ctx, compat));
   if (item.examples?.length) {
     result.examples = item.examples;
   }

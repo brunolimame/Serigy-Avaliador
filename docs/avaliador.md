@@ -202,6 +202,12 @@ pontuaria o item (`ponto` = pontua ou não; `codigo` = `URL_NOT_ACCESSIBLE`, `SC
 - Ficaram **fora** (hipóteses a confirmar com o TCE-SE): `Link` com o `href` só no `<a>` filho (2.2.1), `Texto` vazio em
   uma das ocorrências (1.2) e a avaliação de Acessibilidade na página do `/erro` (13.x).
 
+**Item atendido que o Serigy não pontua vira "Atenção".** Se o `status` é `ok` e o veredito Serigy estimado não pontua, o
+avaliador já grava o item como `warning` (mensagem "Atenção: o Serigy estimado não pontua este item (CÓDIGO)"; `withSerigyEstimadoAtencao`
+em `packages/shared`). O mesmo vale para o Serigy **oficial** anexado a uma avaliação do histórico, mas só na visão
+(`applySerigyOficial`): o resultado guardado, o hash e a exportação JSON não mudam; a UI, os resumos da avaliação aberta e o
+relatório Markdown contam o item como Atenção. O percentual mostrado na lista do histórico continua o do resultado guardado.
+
 Na UI, o resultado mostra "Serigy estimado" (percentual e n/total) no topo e no selo de página, grupo e seção, e um
 selo por item. Em avaliações **antigas** do histórico (sem o campo) nada é mostrado.
 

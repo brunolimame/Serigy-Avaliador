@@ -399,6 +399,40 @@ export function evaluationDuration(r: { startedAt: string; finishedAt: string })
   return Number.isNaN(ms) ? '' : formatDuration(ms);
 }
 
+/** Mensagem acrescentada ao item atendido que o Serigy não pontua. */
+const serigyAtencao = (origem: 'oficial' | 'estimado', codigo?: string): string =>
+  `Atenção: o Serigy ${origem} não pontua este item${codigo ? ` (${codigo})` : ''}`;
+
+/** Item atendido que o veredito Serigy (estimado) reprova vira "Atenção". Os demais ficam como estão. */
+export function withSerigyEstimadoAtencao(item: ItemResult): ItemResult {
+  if (item.status !== 'ok' || !item.serigy || item.serigy.ponto) return item;
+  const nota = serigyAtencao('estimado', item.serigy.codigo);
+  return { ...item, status: 'warning', message: item.message ? `${item.message}; ${nota}` : nota };
+}
+
+/**
+ * Aplica o Serigy oficial anexado a uma avaliação: todo item atendido que o oficial não pontua vira "Atenção", e os
+ * resumos da página e geral são recalculados. Não altera o resultado guardado (só a visão); sem mudança, devolve o mesmo objeto.
+ */
+export function applySerigyOficial(r: EvaluationResult, pares: Record<string, SerigyOficialItem> | undefined): EvaluationResult {
+  if (!pares) return r;
+  let changed = false;
+  const pages = r.pages.map((p) => {
+    const sections = p.sections.map((s) => ({
+      ...s,
+      items: s.items.map((i): ItemResult => {
+        const o = pares[i.id];
+        if (i.status !== 'ok' || !o || o.ponto) return i;
+        changed = true;
+        const nota = serigyAtencao('oficial', parseSerigyDetalhe(o.detalhe).codigo);
+        return { ...i, status: 'warning', message: i.message ? `${i.message}; ${nota}` : nota };
+      }),
+    }));
+    return { ...p, sections, summary: summarize(sections.flatMap((s) => s.items)) };
+  });
+  return changed ? { ...r, pages, summary: summarize(pages.flatMap((p) => p.sections.flatMap((s) => s.items))) } : r;
+}
+
 /** Resume uma lista de itens. `score` = (ok + empty) / total, de 0 a 100. */
 export function summarize(items: Array<{ status: ItemStatus }>): Summary {
   const count = { ok: 0, warning: 0, empty: 0, missing: 0 };
