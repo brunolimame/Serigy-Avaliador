@@ -21,7 +21,7 @@ import type { EvaluationResult, HistoricoAno, ItemResult, ItemStatus, PageResult
 import { analyzedMatchesExpected, evaluationDuration, groupPagesByNumber, MAX_EVIDENCE, parseSerigyDetalhe, serigySummarize, summarize } from '@serigy/shared';
 import { api, download } from '../api';
 import { SCORE_STYLE, scoreTone, type ScoreTone } from '../score';
-import { displayWait, groupIconState, pendingIconKind } from '../status-icons';
+import { displayWait, groupIconState, pendingIconKind, temAnaliseEmAndamento } from '../status-icons';
 import { AMBIENTE_TONE } from './AmbienteBadge';
 import type { PendingState } from '../live';
 import { mergeReevaluated, mergeReevaluatedMany } from '../merge';
@@ -606,6 +606,8 @@ interface Props {
 }
 
 export function ResultView({ result, onChange, pending, progress, onCancel, readOnly, banner, actions, invokerWait: invokerWaitProp, serigyOficial }: Props) {
+  /** Itens já concluídos cujos anos do histórico ainda estão sendo analisados (mesmo indicador de análise que os demais). */
+  const anosPendentes = progress?.anosPendentes ?? [];
   const isLive = pending !== undefined;
   const running = onCancel !== undefined;
   const lastFetched = result.fetched.at(-1);
@@ -965,10 +967,11 @@ export function ResultView({ result, onChange, pending, progress, onCancel, read
                     o ícone do nível de atendimento (verde, amarelo, vermelho). */}
                 {(() => {
                   if (groupBusy) return <Spinner label="Reavaliando" className="size-5 shrink-0 text-primary" />;
-                  const active = allItems.some((i) => {
-                    const state = pending?.get(i.id);
-                    return state === 'running' || state === 'waiting';
-                  });
+                  const active = temAnaliseEmAndamento(
+                    allItems.map((i) => i.id),
+                    pending,
+                    anosPendentes,
+                  );
                   const state = groupIconState({ total: allItems.length, pending: pendingCount, active, score: summary.score });
                   if (state.icon === 'loader') return <Spinner label="Analisando" className="size-5 shrink-0 text-primary" />;
                   if (state.icon === 'skipped') {
@@ -1097,10 +1100,17 @@ export function ResultView({ result, onChange, pending, progress, onCancel, read
                               className={cn('rounded-xl border p-3 transition-colors', tone.row)}
                             >
                               <div className="flex items-start gap-3">
-                                <StatusIcon className={cn('mt-0.5 size-5 shrink-0', tone.iconClass)} />
+                                {anosPendentes.includes(i.id) ? (
+                                  <Spinner label="Analisando anos do histórico" className="mt-0.5 size-5 shrink-0 text-primary" />
+                                ) : (
+                                  <StatusIcon className={cn('mt-0.5 size-5 shrink-0', tone.iconClass)} />
+                                )}
                                 <span className="w-14 shrink-0 text-sm text-muted-foreground">{i.id}</span>
                                 <div className="min-w-0 flex-1 text-sm">
                                   <div className="font-medium">{i.descricao}</div>
+                                  {anosPendentes.includes(i.id) && (
+                                    <div className="text-xs font-medium text-primary">Analisando anos do histórico…</div>
+                                  )}
                                   <div className="text-xs text-muted-foreground">
                                     <code>{i.atributo}</code>
                                     <MessageParts text={i.message} lead=" · " skip={hasFoundList(i) ? isFoundPart : undefined} />

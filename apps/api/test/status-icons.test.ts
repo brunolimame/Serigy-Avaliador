@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { applyEvent, buildView, startLive } from '../../web/src/live';
-import { displayWait, groupIconState, pendingIconKind } from '../../web/src/status-icons';
+import { displayWait, groupIconState, pendingIconKind, temAnaliseEmAndamento } from '../../web/src/status-icons';
 import { prepareEvaluation } from '../src/evaluator/evaluate';
 import { FakeLoader, SCHEMAS } from './helpers';
 
@@ -73,5 +73,20 @@ describe('estado ao vivo alimenta os ícones', () => {
     const cancelled = buildView({ ...live, status: 'cancelled' });
     expect(cancelled.pending.get('4.1.2')).toBe('skipped');
     expect([...cancelled.pending.values()].map(pendingIconKind)).toEqual(['skipped', 'skipped']);
+  });
+});
+
+describe('análise em andamento inclui os anos do histórico pendentes', () => {
+  it('um item já concluído com anos pendentes conta como análise em andamento (grupo e item mostram o loader)', () => {
+    const pending = new Map<string, 'waiting' | 'running' | 'skipped'>();
+    // todos os itens do grupo já concluídos, nenhum na fila; só os anos do item 4.1.18 seguem
+    expect(temAnaliseEmAndamento(['4.1.17', '4.1.18'], pending, ['4.1.18'])).toBe(true);
+    expect(temAnaliseEmAndamento(['4.1.17', '4.1.18'], pending, [])).toBe(false);
+    expect(temAnaliseEmAndamento(['4.1.17'], new Map([['4.1.17', 'running']]), [])).toBe(true);
+  });
+
+  it('grupo sem nada na fila e com anos pendentes mostra o nível de atendimento com o loader ao lado', () => {
+    const active = temAnaliseEmAndamento(['4.1.18'], new Map(), ['4.1.18']);
+    expect(groupIconState({ total: 1, pending: 0, active, score: 50 })).toEqual({ icon: 'level', tone: 'amber', loader: true });
   });
 });

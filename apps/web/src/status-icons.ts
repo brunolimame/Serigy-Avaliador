@@ -48,3 +48,14 @@ export function groupIconState(args: {
 export function displayWait(pending: PendingState | undefined, reevaluating: boolean): PendingState | undefined {
   return pending ?? (reevaluating ? 'running' : undefined);
 }
+
+/**
+ * Há análise em andamento entre estes itens: algum na fila ou em análise, ou com as trocas de ano do histórico ainda
+ * pendentes (o item já está concluído, mas os anos chegam depois). Vale para o grupo e para cada item.
+ */
+export function temAnaliseEmAndamento(ids: string[], pending: Map<string, PendingState> | undefined, anosPendentes: string[]): boolean {
+  return ids.some((id) => {
+    const state = pending?.get(id);
+    return state === 'running' || state === 'waiting' || anosPendentes.includes(id);
+  });
+}
