@@ -1,5 +1,9 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { resolve } from 'node:path';
 import { createServer, type Server } from 'node:http';
+import { execFile } from 'node:child_process';
+import { createRequire } from 'node:module';
+import { promisify } from 'node:util';
 import { DEFAULT_ANOS_HISTORICO, DEFAULT_ESPERA_ANO_SEGUNDOS, SETTINGS, vereditoDosAnos, withHistoricoAnos, type HistoricoAno, type ItemResult, type StreamEvent } from '@serigy/shared';
 import { BrowserLoader, shutdownBrowser } from '../src/evaluator/browser-loader';
 import { prepareEvaluation } from '../src/evaluator/evaluate';
@@ -254,6 +258,25 @@ describe('troca de ano no navegador real', () => {
     server?.close();
     await shutdownBrowser();
   });
+
+  it(
+    'sob o tsx (como a API roda) a contagem de linhas também funciona: o tsx injeta __name, que não existe na página',
+    async (ctx) => {
+      if (!hasBrowser) return ctx.skip();
+      const tsx = createRequire(import.meta.url).resolve('tsx/cli');
+      // assíncrono: o portal falso roda neste mesmo processo e precisa continuar respondendo
+      const { stdout: saida } = await promisify(execFile)(process.execPath, [tsx, resolve(__dirname, 'fixtures/analisar-ano-tsx.mts'), base, '2026', '2025', '2024'], {
+        encoding: 'utf8',
+        timeout: 50_000,
+      });
+      const json = saida.split('\n').find((l) => l.startsWith('RESULTADO '))!.slice('RESULTADO '.length);
+      const [a2026, a2025, a2024] = JSON.parse(json) as HistoricoAno[];
+      expect(a2026).toMatchObject({ passou: true, comDados: true });
+      expect(a2025).toMatchObject({ passou: true, comDados: true });
+      expect(a2024).toMatchObject({ passou: true, comDados: false });
+    },
+    60_000,
+  );
 
   it(
     'classifica cada ano: com dados, sem dados, opção inválida e seção que não muda',

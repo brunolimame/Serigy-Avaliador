@@ -332,9 +332,11 @@ export class BrowserLoader implements PageLoader {
       // Espera a seção mudar (ou, para o ano já selecionado, aparecer). Uma navegação também conta como mudança.
       const limite = Date.now() + timeout;
       let mudou = false;
+      let navegou = false;
       while (Date.now() < limite) {
         const agora = await estado();
-        if (agora?.html != null && (opcao.selected ? true : agora.url !== antes?.url || agora.html !== antes?.html)) {
+        navegou = agora != null && antes != null && agora.url !== antes.url;
+        if (agora?.html != null && (opcao.selected ? true : navegou || agora.html !== antes?.html)) {
           mudou = true;
           break;
         }
@@ -359,7 +361,7 @@ export class BrowserLoader implements PageLoader {
           return dados.filter((el) => !el.hasAttribute('serigyempty') && el.closest('[serigyempty]') === null && el.querySelector('[serigyempty]') === null).length;
         }, loadSelector)
         .catch(() => 0);
-      return { ano, passou: true, comDados: linhas > 0, ...(linhas === 0 ? { detalhe: `Nenhuma linha de dados em [serigyLoadSection=${load}]` } : {}) };
+      return { ano, passou: true, comDados: linhas > 0, ...(navegou ? { navegou } : {}), ...(linhas === 0 ? { detalhe: `Nenhuma linha de dados em [serigyLoadSection=${load}]` } : {}) };
     } finally {
       await page.close().catch(() => undefined);
     }

@@ -58,6 +58,7 @@ const itemSchema = z.strictObject({
         ano: text(10),
         passou: z.boolean(),
         comDados: z.boolean().optional(),
+        navegou: z.boolean().optional(),
         codigo: z.enum(['INVALID_OPTION', 'ERROR_ON_SET_OPTION', 'TABLE_NOT_CHANGED']).optional(),
         detalhe: text(4000).optional(),
       }),

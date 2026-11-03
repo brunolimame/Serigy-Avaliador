@@ -242,12 +242,16 @@ exportação (`salvarRelatorio`).
   anterior ao atual passa na troca de ano (código da falha) ou quando nenhum ano tem dados (`TABLE_NOT_CHANGED`); basta um
   ano anterior passar para pontuar. É uma hipótese calibrada no OP Consórcio. Todo ano analisado mostra as tags
   "Passou" / "Falhou · CÓDIGO" e "Com dados" / "Sem dados" (UI e relatório Markdown).
+- **Navegação:** `HistoricoAno.navegou` indica que a troca de ano recarregou a página (a URL mudou) em vez de atualizar a
+  seção no lugar. Nos itens que o Serigy reprova a mensagem traz a URL com `?ano=…`; o campo existe para correlacionar isso
+  na calibração (hipótese ainda não confirmada).
 - **Stream:** o item sai na hora como antes; cada ano termina em `item-ano` e, ao fim, o item é reenviado com `anos`. O
   `done` só sai depois da fila. Cancelar a avaliação interrompe os anos que ainda não começaram.
 - **Calibração (OP Consórcio, 30/10/2026):** `INVALID_OPTION` (4.1.18, 12.6.10) e `TABLE_NOT_CHANGED` (8.3.6) coincidem
   com o Serigy oficial; tabelas vazias (7.2.5, 9.3.8) aparecem como "sem dados". Ainda diferem do oficial 3.1.9 e 5.1.11
   (o Serigy reprova, o avaliador passa os 4 anos). **Cuidado:** código executado no navegador (`page.evaluate`) só pode
-  usar arrows anônimas; o `tsx` injeta o helper `__name` em funções nomeadas e ele não existe na página.
+  usar arrows anônimas; o `tsx` injeta o helper `__name` em funções nomeadas e ele não existe na página (o teste `sob o tsx` em
+  `historico-anos.test.ts` cobre isso rodando `test/fixtures/analisar-ano-tsx.mts` num processo `tsx`).
 
 ## Navegador embutido (renderização de páginas reativas)
 

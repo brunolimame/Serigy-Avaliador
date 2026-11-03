@@ -261,6 +261,8 @@ export interface HistoricoAno {
   passou: boolean;
   /** Há ao menos uma linha de dados (`<tr>` com `<td>`, fora do serigyEmpty). Indefinido quando não passou. */
   comDados?: boolean;
+  /** A troca de ano recarregou a página (a URL mudou) em vez de atualizar a seção no lugar. */
+  navegou?: boolean;
   codigo?: HistoricoAnoCodigo;
   detalhe?: string;
 }
