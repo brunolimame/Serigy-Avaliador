@@ -271,7 +271,31 @@ export class BrowserLoader implements PageLoader {
    *  - mudou: "sem dados" quando não há nenhuma linha (<tr> com <td>, fora de serigyEmpty)
    * Só clica no elemento do serigyExecuteWaitSection do filtro, nunca em item de exportação.
    */
-  async analisarAno({ url, ano, waitSection, timeoutMs }: AnoRequest): Promise<HistoricoAno> {
+  async analisarAno(req: AnoRequest): Promise<HistoricoAno> {
+    // Prazo total do ano. Chamadas do Playwright como page.evaluate não têm timeout próprio: se a página não responder,
+    // a análise ficaria presa para sempre e travaria a avaliação inteira (ver a fila em evaluate.ts).
+    const limite = (req.timeoutMs ?? this.opts.anoTimeoutMs) + 15_000;
+    let timer: NodeJS.Timeout | undefined;
+    const prazo = new Promise<HistoricoAno>((resolve) => {
+      timer = setTimeout(
+        () =>
+          resolve({
+            ano: req.ano,
+            passou: false,
+            codigo: 'TABLE_NOT_CHANGED',
+            detalhe: `A página de ${req.ano} não respondeu em ${Math.round(limite / 1000)} s (prazo esgotado em ${req.url})`,
+          }),
+        limite,
+      );
+    });
+    try {
+      return await Promise.race([this.analisarAnoSemPrazo(req), prazo]);
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  private async analisarAnoSemPrazo({ url, ano, waitSection, timeoutMs }: AnoRequest): Promise<HistoricoAno> {
     const timeout = timeoutMs ?? this.opts.anoTimeoutMs;
     const falha = (codigo: NonNullable<HistoricoAno['codigo']>, detalhe: string): HistoricoAno => ({ ano, passou: false, codigo, detalhe });
     const page = await this.context.newPage();

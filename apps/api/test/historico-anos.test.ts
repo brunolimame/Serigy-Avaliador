@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { resolve } from 'node:path';
 import { createServer, type Server } from 'node:http';
 import { execFile } from 'node:child_process';
@@ -202,6 +202,27 @@ describe('análise dos anos do historicoExercicio', () => {
   it('withHistoricoAnos não rebaixa item que não estava atendido', () => {
     const base = { status: 'missing', message: 'x' } as ItemResult;
     expect(withHistoricoAnos(base, [{ ano: '2025', passou: false, codigo: 'INVALID_OPTION' }]).status).toBe('missing');
+  });
+});
+
+describe('prazo do ano: uma página que não responde não trava a avaliação', () => {
+  it('devolve TABLE_NOT_CHANGED no prazo, mesmo que a análise nunca termine', async () => {
+    vi.useFakeTimers();
+    try {
+      // Sem navegador: só o caminho do prazo. O método interno nunca resolve (como um page.evaluate preso).
+      const loader = Object.create(BrowserLoader.prototype) as unknown as {
+        opts: { anoTimeoutMs: number };
+        analisarAnoSemPrazo: () => Promise<never>;
+        analisarAno: BrowserLoader['analisarAno'];
+      };
+      loader.opts = { anoTimeoutMs: 100 };
+      loader.analisarAnoSemPrazo = () => new Promise<never>(() => {});
+      const pending = loader.analisarAno({ url: 'http://x/', ano: '2025', waitSection: 'tab' });
+      await vi.advanceTimersByTimeAsync(16_000);
+      await expect(pending).resolves.toMatchObject({ ano: '2025', passou: false, codigo: 'TABLE_NOT_CHANGED' });
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
 
