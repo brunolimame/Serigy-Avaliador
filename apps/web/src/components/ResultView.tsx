@@ -590,7 +590,7 @@ interface Props {
   onChange: (next: EvaluationResult) => void;
   /** Itens ainda sem resultado (avaliação em andamento ou interrompida). */
   pending?: Map<string, PendingState>;
-  progress?: { done: number; total: number };
+  progress?: { done: number; total: number; anosPendentes?: string[] };
   /** Presente enquanto a avaliação está rodando. */
   onCancel?: () => void;
   /** Avaliação do histórico: só leitura (sem reavaliar item/grupo). */
@@ -805,6 +805,12 @@ export function ResultView({ result, onChange, pending, progress, onCancel, read
               <span className="font-medium">
                 {running ? 'Analisando' : 'Interrompida'}: {progress.done} de {progress.total} itens concluídos
               </span>
+              {progress.anosPendentes && progress.anosPendentes.length > 0 && (
+                <span className="text-xs text-muted-foreground" aria-label="Anos do histórico pendentes">
+                  · anos do histórico em andamento: {progress.anosPendentes.slice(0, 5).join(', ')}
+                  {progress.anosPendentes.length > 5 ? ` e mais ${progress.anosPendentes.length - 5}` : ''}
+                </span>
+              )}
               {onCancel && (
                 <Button type="button" size="xs" variant="outline" className="ml-auto bg-white dark:bg-white/10" onClick={onCancel}>
                   <X />

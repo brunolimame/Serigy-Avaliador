@@ -553,6 +553,7 @@ export type StreamEvent =
   | { type: 'invoker'; invoker: InvokerCheck }
   | { type: 'section-start'; pageId: string; sectionId: string }
   | { type: 'item'; pageId: string; sectionId: string; item: ItemResult }
+  | { type: 'anos-iniciados'; itemId: string; total: number }
   | { type: 'item-ano'; itemId: string; ano: HistoricoAno; total: number }
   | { type: 'done'; result: EvaluationResult }
   | { type: 'error'; message: string; status: number };

@@ -22,6 +22,8 @@ export interface Live {
   items: Record<string, ItemResult>;
   /** Anos do historicoExercicio já analisados (parcial, até o item final chegar com `anos`). */
   anos: Record<string, Array<HistoricoAno | undefined>>;
+  /** Itens já concluídos cujas trocas de ano do histórico ainda não terminaram. */
+  anosPendentes: string[];
   /** Itens cuja seção está sendo analisada agora. */
   running: string[];
   fetched: FetchedPage[];
@@ -29,7 +31,7 @@ export interface Live {
 }
 
 export function startLive(plan: EvaluationPlan): Live {
-  return { plan, status: 'running', items: {}, anos: {}, running: [], fetched: [] };
+  return { plan, status: 'running', items: {}, anos: {}, anosPendentes: [], running: [], fetched: [] };
 }
 
 /** Aplica um evento ao estado (função pura). `plan` e `done` são tratados por quem chama. */
@@ -40,8 +42,18 @@ export function applyEvent(live: Live, event: StreamEvent): Live {
       const ids = (section?.items ?? []).map((i) => i.id).filter((id) => !live.items[id]);
       return { ...live, running: [...live.running, ...ids] };
     }
-    case 'item':
-      return { ...live, items: { ...live.items, [event.item.id]: event.item }, running: live.running.filter((id) => id !== event.item.id) };
+    case 'item': {
+      // O item final (com `anos`) é o que encerra a análise dos anos; o primeiro envio ainda não os tem.
+      const encerraAnos = event.item.anos !== undefined;
+      return {
+        ...live,
+        items: { ...live.items, [event.item.id]: event.item },
+        running: live.running.filter((id) => id !== event.item.id),
+        anosPendentes: encerraAnos ? live.anosPendentes.filter((id) => id !== event.item.id) : live.anosPendentes,
+      };
+    }
+    case 'anos-iniciados':
+      return live.anosPendentes.includes(event.itemId) ? live : { ...live, anosPendentes: [...live.anosPendentes, event.itemId] };
     case 'item-ano': {
       return { ...live, anos: { ...live.anos, [event.itemId]: [...(live.anos[event.itemId] ?? []), event.ano] } };
     }
@@ -62,7 +74,7 @@ export interface LiveView {
   /** Resultado parcial: itens pendentes são só marcadores e ficam fora dos resumos. */
   result: EvaluationResult;
   pending: Map<string, PendingState>;
-  progress: { done: number; total: number };
+  progress: { done: number; total: number; anosPendentes: string[] };
 }
 
 /** Monta um EvaluationResult parcial + o estado de cada item pendente, para o ResultView. */
@@ -121,6 +133,6 @@ export function buildView(live: Live): LiveView {
       pages,
     },
     pending,
-    progress: { done: finishedAll.length, total: plan.scope.items },
+    progress: { done: finishedAll.length, total: plan.scope.items, anosPendentes: live.anosPendentes },
   };
 }

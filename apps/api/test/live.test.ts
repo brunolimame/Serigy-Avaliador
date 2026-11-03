@@ -18,7 +18,7 @@ describe('estado ao vivo da UI', () => {
     let live = startLive(prepared.plan);
     let view = buildView(live);
     expect([...view.pending.values()]).toEqual(['waiting', 'waiting', 'waiting']);
-    expect(view.progress).toEqual({ done: 0, total: 3 });
+    expect(view.progress).toEqual({ done: 0, total: 3, anosPendentes: [] });
     expect(view.result.summary.total).toBe(0);
 
     const sectionStart = events.find((e) => e.type === 'section-start' && e.sectionId === '4.1')!;
@@ -33,7 +33,7 @@ describe('estado ao vivo da UI', () => {
     view = buildView(live);
     expect(view.pending.has('4.1.1')).toBe(false);
     expect(view.pending.get('4.1.2')).toBe('running');
-    expect(view.progress).toEqual({ done: 1, total: 3 });
+    expect(view.progress).toEqual({ done: 1, total: 3, anosPendentes: [] });
     expect(view.result.summary).toMatchObject({ total: 1, ok: 1 });
     // o marcador pendente (status "missing") não é contado como não encontrado
     expect(view.result.pages[0]!.summary.missing).toBe(0);

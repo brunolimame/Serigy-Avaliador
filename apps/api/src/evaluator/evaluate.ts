@@ -573,6 +573,8 @@ export function prepareEvaluation(req: EvaluationRequest, deps: EvaluateDeps = {
       }
       const analisar = loader.analisarAno.bind(loader);
       const waitSection = el.waitSection;
+      // O item já foi emitido como concluído, mas as trocas de ano ainda vão chegar: a interface precisa saber disso.
+      emit({ type: 'anos-iniciados', itemId: item.id, total: anosAnalisados.length });
       const resultados: HistoricoAno[] = [];
       const tarefas = anosAnalisados.map(async (ano, i) => {
         // Mesma página, mesmo filtro e mesmo ano já analisados por outro item: reaproveita a troca em vez de repeti-la.
