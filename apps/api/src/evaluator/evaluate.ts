@@ -554,6 +554,8 @@ export function prepareEvaluation(req: EvaluationRequest, deps: EvaluateDeps = {
     // 2. Seção a seção: baixa a página do caminho, segue serigyLink necessários e avalia os itens.
     const done = new Map<string, ItemResult>();
     const anoLimiter = new Limiter(ANO_CONCURRENCY);
+    // Anos já pedidos nesta avaliação, por página + filtro + ano: os itens que caem na mesma página compartilham o resultado.
+    const anoCache = new Map<string, Promise<HistoricoAno | undefined>>();
     const anoJobs: Array<Promise<void>> = [];
     let anosIgnorados = false;
 
@@ -572,19 +574,26 @@ export function prepareEvaluation(req: EvaluationRequest, deps: EvaluateDeps = {
       const analisar = loader.analisarAno.bind(loader);
       const waitSection = el.waitSection;
       const resultados: HistoricoAno[] = [];
-      const tarefas = anosAnalisados.map((ano, i) =>
-        anoLimiter.run(async () => {
-          if (signal?.aborted) return;
-          let r: HistoricoAno;
-          try {
-            r = await analisar({ url: el.pageUrl, ano, waitSection, timeoutMs: esperaAnoMs });
-          } catch (err) {
-            r = { ano, passou: false, codigo: 'ERROR_ON_SET_OPTION', detalhe: `Erro ao selecionar ${ano} em ${el.pageUrl}: ${err instanceof Error ? err.message : String(err)}` };
-          }
-          resultados[i] = r;
-          emit({ type: 'item-ano', itemId: item.id, ano: r, total: anosAnalisados.length });
-        }),
-      );
+      const tarefas = anosAnalisados.map(async (ano, i) => {
+        // Mesma página, mesmo filtro e mesmo ano já analisados por outro item: reaproveita a troca em vez de repeti-la.
+        const chave = `${urlKey(el.pageUrl)}|${waitSection}|${ano}`;
+        let trabalho = anoCache.get(chave);
+        if (!trabalho) {
+          trabalho = anoLimiter.run(async (): Promise<HistoricoAno | undefined> => {
+            if (signal?.aborted) return undefined;
+            try {
+              return await analisar({ url: el.pageUrl, ano, waitSection, timeoutMs: esperaAnoMs });
+            } catch (err) {
+              return { ano, passou: false, codigo: 'ERROR_ON_SET_OPTION', detalhe: `Erro ao selecionar ${ano} em ${el.pageUrl}: ${err instanceof Error ? err.message : String(err)}` };
+            }
+          });
+          anoCache.set(chave, trabalho);
+        }
+        const r = await trabalho;
+        if (!r) return;
+        resultados[i] = r;
+        emit({ type: 'item-ano', itemId: item.id, ano: r, total: anosAnalisados.length });
+      });
       anoJobs.push(
         Promise.all(tarefas).then(() => {
           if (signal?.aborted) return;
