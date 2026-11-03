@@ -3,7 +3,7 @@
  
 
 | Dimensão | Atributo | Valor | 
-| Atividades Finalísticas | serigySchema | https://serigy.tce.se.gov.br/consorcios/atividades-finalisticas.html |
+| Atividades Finalísticas | serigySchema | https://serigy.tce.se.gov.br/consorcio/atividades-finalisticas.html |
  
 
 ## 25.1. Protocolo de Intenções
@@ -40,7 +40,7 @@
 | 25.4.1 | 25.4 | Contrato de Programa | contratoPrograma | Anexo |
  
 
-## 25.5. Ata de Eleição
+## 25.5. Atas das Eleições
 
  **Caminho URL:**[Portal da Transparencia]/Atividades/Atas/Eleicoes 
 
@@ -75,7 +75,7 @@
  
 
 ```
-<div serigySchema="https://serigy.tce.se.gov.br/consorcios/atividades-finalisticas.html">
+<div serigySchema="https://serigy.tce.se.gov.br/consorcio/atividades-finalisticas.html">
     <!-- Outras seções HTML podem existir internamente -->
     <select serigyItem="historicoExercicio"> <!-- Componente obrigatório -->
         <option serigyValue="2026">2026</option>
@@ -91,7 +91,7 @@
  
 
 ```
-<a serigySchema="https://serigy.tce.se.gov.br/consorcios/atividades-finalisticas.html" serigyItem="protocoloIntencoes"
+<a serigySchema="https://serigy.tce.se.gov.br/consorcio/atividades-finalisticas.html" serigyItem="protocoloIntencoes"
     href="/documentos/protocolo-intencoes-2026.pdf">
     Protocolo de Intenções do Consórcio Intermunicipal - 2026
 </a>
@@ -102,7 +102,7 @@
  
 
 ```
-<a serigySchema="https://serigy.tce.se.gov.br/consorcios/atividades-finalisticas.html" serigyItem="estatutoConsorcio"
+<a serigySchema="https://serigy.tce.se.gov.br/consorcio/atividades-finalisticas.html" serigyItem="estatutoConsorcio"
     href="/documentos/estatuto-consorcio.pdf">
     Estatuto do Consórcio Público Intermunicipal
 </a>
@@ -113,7 +113,7 @@
  
 
 ```
-<a serigySchema="https://serigy.tce.se.gov.br/consorcios/atividades-finalisticas.html" serigyItem="contratoRateio"
+<a serigySchema="https://serigy.tce.se.gov.br/consorcio/atividades-finalisticas.html" serigyItem="contratoRateio"
     href="/documentos/contrato-rateio-2026.pdf">
     Contrato de Rateio - Exercício 2026
 </a>
@@ -124,7 +124,7 @@
  
 
 ```
-<a serigySchema="https://serigy.tce.se.gov.br/consorcios/atividades-finalisticas.html" serigyItem="contratoPrograma"
+<a serigySchema="https://serigy.tce.se.gov.br/consorcio/atividades-finalisticas.html" serigyItem="contratoPrograma"
     href="/documentos/contrato-programa.pdf">
     Contrato de Programa - Prestação de Serviços Públicos
 </a>
@@ -135,7 +135,7 @@
  
 
 ```
-<a serigySchema="https://serigy.tce.se.gov.br/consorcios/atividades-finalisticas.html" serigyItem="ataEleicao"
+<a serigySchema="https://serigy.tce.se.gov.br/consorcio/atividades-finalisticas.html" serigyItem="ataEleicao"
     href="/documentos/ata-eleicao-2025.pdf">
     Ata de Eleição dos Dirigentes - Biênio 2025-2026
 </a>
@@ -146,7 +146,7 @@
  
 
 ```
-<a serigySchema="https://serigy.tce.se.gov.br/consorcios/atividades-finalisticas.html" serigyItem="ataAssembleia"
+<a serigySchema="https://serigy.tce.se.gov.br/consorcio/atividades-finalisticas.html" serigyItem="ataAssembleia"
     href="/documentos/ata-assembleia-01-2026.pdf">
     Ata da Assembleia Geral Ordinária - Janeiro/2026
 </a>
@@ -157,7 +157,7 @@
  
 
 ```
-<ul serigySchema="https://serigy.tce.se.gov.br/consorcios/atividades-finalisticas.html">
+<ul serigySchema="https://serigy.tce.se.gov.br/consorcio/atividades-finalisticas.html">
     <li serigyItem="enteAssociado">Município de Aracaju</li>
     <li serigyItem="enteAssociado">Município de Nossa Senhora do Socorro</li>
     <li serigyItem="enteAssociado">Município de São Cristóvão</li>
@@ -166,7 +166,7 @@
 <h3>Seção para informação de data de atualização das informações apresentadas:</h3>
 
 ```HTML
-<div serigySchema="https://serigy.tce.se.gov.br/consorcios/atividades-finalisticas.html" serigyItem="dataUltimaAtualizacao">
+<div serigySchema="https://serigy.tce.se.gov.br/consorcio/atividades-finalisticas.html" serigyItem="dataUltimaAtualizacao">
     Conjunto de informações atualizado em <b>30/04/2026</b> com dados até <b>29/04/2026</b>
 </div>
 ```

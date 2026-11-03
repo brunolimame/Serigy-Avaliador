@@ -94,25 +94,25 @@ describe('veredito Serigy — demais casos', () => {
   });
 });
 
-describe('veredito Serigy — schema da seção 25 (consorcios × consorcio)', () => {
+describe('schema da seção 25 (documentação atualizada: consorcio/atividades-finalisticas.html)', () => {
   const E = 'https://p.gov.br/atividades/estatuto';
-  const SC = 'https://serigy.tce.se.gov.br/consorcios/atividades-finalisticas.html';
-  const html = `<div serigySchema="${SC}"><a serigyItem="estatutoConsorcio" href="https://p.gov.br/estatuto.pdf">Estatuto</a></div>`;
-  const go = (extra: Partial<Parameters<typeof evaluate>[0]> = {}) =>
-    evaluate({ url: P, poder: 'consorcios-publicos', items: ['25.2.1'], ...extra }, { loader: new FakeLoader({ [P]: '<html/>', [E]: html }) });
+  const NOVO = 'https://serigy.tce.se.gov.br/consorcio/atividades-finalisticas.html';
+  const ANTIGO = 'https://serigy.tce.se.gov.br/consorcios/atividades-finalisticas.html';
+  const pagina = (schema: string) => `<div serigySchema="${schema}"><a serigyItem="estatutoConsorcio" href="https://p.gov.br/estatuto.pdf">Estatuto</a></div>`;
+  const go = (html: string) =>
+    evaluate({ url: P, poder: 'consorcios-publicos', items: ['25.2.1'] }, { loader: new FakeLoader({ [P]: '<html/>', [E]: html }) });
 
-  it('com a compatibilidade (padrão) o Serigy não pontua e o item vira Atenção', async () => {
-    const i = find(await go(), '25.2.1');
-    expect(i.status).toBe('warning');
-    expect(i.serigy).toMatchObject({ ponto: false, codigo: 'SCHEMA_NOT_FOUND' });
-    expect(i.serigy?.detalhe).toContain('/consorcio/atividades-finalisticas.html');
+  it('o schema atual da documentação é encontrado e o item atende, sem desvio conhecido', async () => {
+    const i = find(await go(pagina(NOVO)), '25.2.1');
+    expect(i.status).toBe('ok');
+    expect(i.serigy).toEqual({ ponto: true });
+    expect(i.schema.confere).toBe(true);
   });
 
-  it('sem a compatibilidade só avisa e o item continua atendido', async () => {
-    const i = find(await go({ compatibilidadeSerigy: false }), '25.2.1');
-    expect(i.status).toBe('ok');
-    expect(i.serigy?.ponto).toBe(true);
-    expect(i.serigy?.detalhe).toContain('/consorcio/atividades-finalisticas.html');
+  it('o schema antigo (consorcios/) não é mais o da documentação: o item não é encontrado e não pontua', async () => {
+    const i = find(await go(pagina(ANTIGO)), '25.2.1');
+    expect(i.status).toBe('missing');
+    expect(i.serigy).toMatchObject({ ponto: false, codigo: 'SCHEMA_NOT_FOUND' });
   });
 });
 

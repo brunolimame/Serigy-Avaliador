@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-10-06T12:36:42.342Z",
+  "generatedAt": "2026-11-03T12:59:03.293Z",
   "source": "docs/pntp-2026",
   "pages": [
     {
@@ -5045,7 +5045,7 @@
       "folder": "consorcios-publicos",
       "number": "25",
       "title": "Atividades Finalísticas",
-      "schemaUrl": "https://serigy.tce.se.gov.br/consorcios/atividades-finalisticas.html",
+      "schemaUrl": "https://serigy.tce.se.gov.br/consorcio/atividades-finalisticas.html",
       "docUrl": "https://serigy.tce.se.gov.br/2026/consorcios-publicos/atividades-finalisticas.html",
       "sections": [
         {
@@ -5066,7 +5066,7 @@
               "examples": [
                 {
                   "title": "Código HTML para exibição do Protocolo de Intenções",
-                  "html": "<a serigySchema=\"https://serigy.tce.se.gov.br/consorcios/atividades-finalisticas.html\" serigyItem=\"protocoloIntencoes\"\n    href=\"/documentos/protocolo-intencoes-2026.pdf\">\n    Protocolo de Intenções do Consórcio Intermunicipal - 2026\n</a>"
+                  "html": "<a serigySchema=\"https://serigy.tce.se.gov.br/consorcio/atividades-finalisticas.html\" serigyItem=\"protocoloIntencoes\"\n    href=\"/documentos/protocolo-intencoes-2026.pdf\">\n    Protocolo de Intenções do Consórcio Intermunicipal - 2026\n</a>"
                 }
               ]
             }
@@ -5091,7 +5091,7 @@
               "examples": [
                 {
                   "title": "Código HTML para exibição do Estatuto",
-                  "html": "<a serigySchema=\"https://serigy.tce.se.gov.br/consorcios/atividades-finalisticas.html\" serigyItem=\"estatutoConsorcio\"\n    href=\"/documentos/estatuto-consorcio.pdf\">\n    Estatuto do Consórcio Público Intermunicipal\n</a>"
+                  "html": "<a serigySchema=\"https://serigy.tce.se.gov.br/consorcio/atividades-finalisticas.html\" serigyItem=\"estatutoConsorcio\"\n    href=\"/documentos/estatuto-consorcio.pdf\">\n    Estatuto do Consórcio Público Intermunicipal\n</a>"
                 }
               ]
             }
@@ -5116,7 +5116,7 @@
               "examples": [
                 {
                   "title": "Código HTML para exibição do Contrato de Rateio",
-                  "html": "<a serigySchema=\"https://serigy.tce.se.gov.br/consorcios/atividades-finalisticas.html\" serigyItem=\"contratoRateio\"\n    href=\"/documentos/contrato-rateio-2026.pdf\">\n    Contrato de Rateio - Exercício 2026\n</a>"
+                  "html": "<a serigySchema=\"https://serigy.tce.se.gov.br/consorcio/atividades-finalisticas.html\" serigyItem=\"contratoRateio\"\n    href=\"/documentos/contrato-rateio-2026.pdf\">\n    Contrato de Rateio - Exercício 2026\n</a>"
                 }
               ]
             },
@@ -5144,7 +5144,7 @@
               "examples": [
                 {
                   "title": "Código HTML de exemplo para componente de pesquisa",
-                  "html": "<div serigySchema=\"https://serigy.tce.se.gov.br/consorcios/atividades-finalisticas.html\">\n    <!-- Outras seções HTML podem existir internamente -->\n    <select serigyItem=\"historicoExercicio\"> <!-- Componente obrigatório -->\n        <option serigyValue=\"2026\">2026</option>\n        <option serigyValue=\"2025\">2025</option>\n        <option serigyValue=\"2024\">2024</option>\n    </select>\n    <button type=\"submit\" serigyExecuteWaitSection=\"consorcioTabela\">Pesquisar</button>\n</div>"
+                  "html": "<div serigySchema=\"https://serigy.tce.se.gov.br/consorcio/atividades-finalisticas.html\">\n    <!-- Outras seções HTML podem existir internamente -->\n    <select serigyItem=\"historicoExercicio\"> <!-- Componente obrigatório -->\n        <option serigyValue=\"2026\">2026</option>\n        <option serigyValue=\"2025\">2025</option>\n        <option serigyValue=\"2024\">2024</option>\n    </select>\n    <button type=\"submit\" serigyExecuteWaitSection=\"consorcioTabela\">Pesquisar</button>\n</div>"
                 }
               ]
             }
@@ -5169,7 +5169,7 @@
               "examples": [
                 {
                   "title": "Código HTML para exibição do Contrato de Programa",
-                  "html": "<a serigySchema=\"https://serigy.tce.se.gov.br/consorcios/atividades-finalisticas.html\" serigyItem=\"contratoPrograma\"\n    href=\"/documentos/contrato-programa.pdf\">\n    Contrato de Programa - Prestação de Serviços Públicos\n</a>"
+                  "html": "<a serigySchema=\"https://serigy.tce.se.gov.br/consorcio/atividades-finalisticas.html\" serigyItem=\"contratoPrograma\"\n    href=\"/documentos/contrato-programa.pdf\">\n    Contrato de Programa - Prestação de Serviços Públicos\n</a>"
                 }
               ]
             }
@@ -5178,7 +5178,7 @@
         },
         {
           "id": "25.5",
-          "title": "Ata de Eleição",
+          "title": "Atas das Eleições",
           "notes": [],
           "items": [
             {
@@ -5194,7 +5194,7 @@
               "examples": [
                 {
                   "title": "Código HTML para exibição da Ata de Eleição",
-                  "html": "<a serigySchema=\"https://serigy.tce.se.gov.br/consorcios/atividades-finalisticas.html\" serigyItem=\"ataEleicao\"\n    href=\"/documentos/ata-eleicao-2025.pdf\">\n    Ata de Eleição dos Dirigentes - Biênio 2025-2026\n</a>"
+                  "html": "<a serigySchema=\"https://serigy.tce.se.gov.br/consorcio/atividades-finalisticas.html\" serigyItem=\"ataEleicao\"\n    href=\"/documentos/ata-eleicao-2025.pdf\">\n    Ata de Eleição dos Dirigentes - Biênio 2025-2026\n</a>"
                 }
               ]
             }
@@ -5219,7 +5219,7 @@
               "examples": [
                 {
                   "title": "Código HTML para exibição da Assembleia Geral",
-                  "html": "<a serigySchema=\"https://serigy.tce.se.gov.br/consorcios/atividades-finalisticas.html\" serigyItem=\"ataAssembleia\"\n    href=\"/documentos/ata-assembleia-01-2026.pdf\">\n    Ata da Assembleia Geral Ordinária - Janeiro/2026\n</a>"
+                  "html": "<a serigySchema=\"https://serigy.tce.se.gov.br/consorcio/atividades-finalisticas.html\" serigyItem=\"ataAssembleia\"\n    href=\"/documentos/ata-assembleia-01-2026.pdf\">\n    Ata da Assembleia Geral Ordinária - Janeiro/2026\n</a>"
                 }
               ]
             },
@@ -5247,7 +5247,7 @@
               "examples": [
                 {
                   "title": "Código HTML de exemplo para componente de pesquisa",
-                  "html": "<div serigySchema=\"https://serigy.tce.se.gov.br/consorcios/atividades-finalisticas.html\">\n    <!-- Outras seções HTML podem existir internamente -->\n    <select serigyItem=\"historicoExercicio\"> <!-- Componente obrigatório -->\n        <option serigyValue=\"2026\">2026</option>\n        <option serigyValue=\"2025\">2025</option>\n        <option serigyValue=\"2024\">2024</option>\n    </select>\n    <button type=\"submit\" serigyExecuteWaitSection=\"consorcioTabela\">Pesquisar</button>\n</div>"
+                  "html": "<div serigySchema=\"https://serigy.tce.se.gov.br/consorcio/atividades-finalisticas.html\">\n    <!-- Outras seções HTML podem existir internamente -->\n    <select serigyItem=\"historicoExercicio\"> <!-- Componente obrigatório -->\n        <option serigyValue=\"2026\">2026</option>\n        <option serigyValue=\"2025\">2025</option>\n        <option serigyValue=\"2024\">2024</option>\n    </select>\n    <button type=\"submit\" serigyExecuteWaitSection=\"consorcioTabela\">Pesquisar</button>\n</div>"
                 }
               ]
             }
@@ -5272,7 +5272,7 @@
               "examples": [
                 {
                   "title": "Código HTML para exibição dos Entes Associados",
-                  "html": "<ul serigySchema=\"https://serigy.tce.se.gov.br/consorcios/atividades-finalisticas.html\">\n    <li serigyItem=\"enteAssociado\">Município de Aracaju</li>\n    <li serigyItem=\"enteAssociado\">Município de Nossa Senhora do Socorro</li>\n    <li serigyItem=\"enteAssociado\">Município de São Cristóvão</li>\n</ul>\n\n<h3>Seção para informação de data de atualização das informações apresentadas:</h3>"
+                  "html": "<ul serigySchema=\"https://serigy.tce.se.gov.br/consorcio/atividades-finalisticas.html\">\n    <li serigyItem=\"enteAssociado\">Município de Aracaju</li>\n    <li serigyItem=\"enteAssociado\">Município de Nossa Senhora do Socorro</li>\n    <li serigyItem=\"enteAssociado\">Município de São Cristóvão</li>\n</ul>\n\n<h3>Seção para informação de data de atualização das informações apresentadas:</h3>"
                 }
               ]
             }

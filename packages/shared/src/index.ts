@@ -241,12 +241,7 @@ export interface SerigyVeredito {
  * Schemas que o validador oficial do Serigy espera de forma diferente da documentação (a matriz é a fonte da verdade
  * e não é alterada). Com a compatibilidade ligada, o item vira "não atende" no veredito Serigy.
  */
-export const SERIGY_SCHEMA_QUIRKS: Array<{ documentado: string; serigyEspera: string }> = [
-  {
-    documentado: 'https://serigy.tce.se.gov.br/consorcios/atividades-finalisticas.html',
-    serigyEspera: 'https://serigy.tce.se.gov.br/consorcio/atividades-finalisticas.html',
-  },
-];
+export const SERIGY_SCHEMA_QUIRKS: Array<{ documentado: string; serigyEspera: string }> = [];
 
 /** Códigos de falha da troca de ano do `historicoExercicio` (os mesmos do validador oficial). */
 export type HistoricoAnoCodigo = Extract<SerigyCodigo, 'INVALID_OPTION' | 'ERROR_ON_SET_OPTION' | 'TABLE_NOT_CHANGED'>;
@@ -699,7 +694,7 @@ export const SETTINGS: SettingDef[] = [
     padrao: true,
     rotulo: 'Reproduzir no veredito Serigy os desvios conhecidos do validador oficial',
     descricao:
-      'Ligada, o veredito Serigy estimado também reproduz o que o validador oficial faz de diferente da documentação: hoje, ele procura o schema da seção 25 (Atividades Finalísticas dos consórcios) como “consorcio/…” e a matriz publica “consorcios/…”. Só afeta o veredito Serigy; o status do avaliador segue a documentação.',
+      'Ligada, o veredito Serigy estimado reproduz os desvios conhecidos do validador oficial em relação à documentação (lista SERIGY_SCHEMA_QUIRKS). Hoje não há desvio registrado: o schema da seção 25 já é o mesmo da documentação atual (consorcio/…). Só afeta o veredito Serigy; o status do avaliador segue a documentação.',
   },
 ];
 

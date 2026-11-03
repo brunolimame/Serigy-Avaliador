@@ -197,10 +197,10 @@ pontuaria o item (`ponto` = pontua ou não; `codigo` = `URL_NOT_ACCESSIBLE`, `SC
   (`serigyItem="filtroPesquisa"`) que o contém; o atalho "select de anos" do avaliador **não** pontua
   (`WAITSECTION_NOT_FOUND`). Sem `serigyLoadSection` de mesmo valor no HTML carregado, pontua com aviso (ele pode surgir
   após o clique).
-- **Desvios do validador oficial** (`SERIGY_SCHEMA_QUIRKS` em `packages/shared`): hoje, a seção 25 (Atividades
-  Finalísticas dos consórcios) é procurada como `consorcio/…` (singular), e a matriz publica `consorcios/…`. Com a
-  configuração `comportamento.compatibilidadeSerigy` ligada (padrão), o item não pontua (`SCHEMA_NOT_FOUND`); desligada,
-  só ganha um aviso no `detalhe`. O `status` não muda e a matriz não é alterada.
+- **Desvios do validador oficial** (`SERIGY_SCHEMA_QUIRKS` em `packages/shared`; hoje vazio). Até 03/11/2026 a seção 25
+  (Atividades Finalísticas dos consórcios) era procurada como `consorcio/…` e a documentação publicava `consorcios/…`;
+  a documentação foi atualizada para `consorcio/…` e a lista foi esvaziada. A configuração
+  `comportamento.compatibilidadeSerigy` continua disponível para futuros desvios.
 - Ficaram **fora** (hipóteses a confirmar com o TCE-SE): `Link` com o `href` só no `<a>` filho (2.2.1), `Texto` vazio em
   uma das ocorrências (1.2) e a avaliação de Acessibilidade na página do `/erro` (13.x).
 
