@@ -160,7 +160,7 @@ Não publique credenciais, dados pessoais de portais ou o banco SQLite nas issue
 relatar uma vulnerabilidade, descreva a classe do problema e entre em contato com o responsável pelo projeto
 antes de divulgá-la publicamente.
 
-## Licença e conduta
+## Conduta
 
-Ao contribuir, você concorda que sua contribuição seja distribuída nos mesmos termos do projeto. Trate as pessoas
-com respeito nas issues, nos pull requests e nas revisões.
+Trate as pessoas com respeito nas issues, nos pull requests e nas revisões. O repositório ainda não tem um arquivo
+de licença; antes de uma distribuição aberta, o responsável pelo projeto deve defini-la.
