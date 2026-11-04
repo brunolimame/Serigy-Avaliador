@@ -9,6 +9,14 @@ Markdown ou JSON.
 > [`docs/avaliador.md`](docs/avaliador.md). A matriz de requisitos está em [`docs/pntp-2026`](docs/pntp-2026/README.md).
 > O plano de distribuição como aplicativo desktop está em [`DISTRIBUICAO.md`](DISTRIBUICAO.md).
 
+## Origem da matriz e licença
+
+A pasta `docs/pntp-2026` reproduz a **matriz de requisitos PNTP 2026**, publicada no portal Serigy do **TCE-SE**
+e de responsabilidade do **TCE-SE** e da **ATRICON**. Esse conteúdo não é coberto pela licença MIT do projeto,
+que vale para o código. Detalhes e créditos estão em [`CREDITS.md`](CREDITS.md).
+
+O código é distribuído sob a [licença MIT](LICENSE).
+
 ## O que é a marcação Serigy
 
 O Serigy é o padrão do TCE-SE para que sistemas de transparência publiquem informações em um formato

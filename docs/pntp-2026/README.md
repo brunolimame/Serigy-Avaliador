@@ -17,6 +17,11 @@ Cada arquivo traz as seções, o "Caminho URL" esperado, a tabela Item/Critério
 | Estatais | `estatais/` (atividades-finalisticas, despesas, licitacoes, planejamento-prestacao-contas) |
 | Estatais Independentes | `estatais-independentes/planejamento-prestacao-contas.md` |
 
+**Origem e direitos.** Este conjunto reproduz a matriz de requisitos PNTP 2026 publicada pelo **TCE-SE** no portal
+Serigy e é de responsabilidade do **TCE-SE** e da **ATRICON**. Os direitos sobre o conteúdo pertencem a essas
+instituições; a licença MIT do projeto não se aplica a esta pasta. Divergências da documentação oficial devem ser
+comunicadas ao TCE-SE.
+
 Todas as 36 páginas de `/2026/` do Serigy estão cobertas. O site também publica PNTP 2024 e PETP 2026 (`/2024/`, `/petp/`), que não fazem parte desta cópia.
 
 Para atualizar: baixar as páginas (links listados no bundle `assets/js/app.*.js` do Serigy) e reconverter.

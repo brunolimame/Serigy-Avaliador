@@ -307,12 +307,11 @@ export function App() {
         <Info className="text-amber-600 dark:text-amber-400" />
         <AlertTitle>Ferramenta de análise SERIGY</AlertTitle>
         <AlertDescription className="text-amber-950/90 dark:text-amber-200">
-          Está é uma ferramenta de análise, com o objetivo ajudar no desenvolvimento: verifica o mapeamento da marcação Serigy do portal contra a matriz de requisitos
-          e ajuda a corrigir o que falta antes da validação oficial. Ela <strong>não substitui</strong> a validação realizada pelo Serigy; o
-          resultado que vale é o do{' '}
+          Esta é uma ferramenta de apoio ao desenvolvimento: compara a marcação Serigy do portal com a matriz de requisitos e aponta
+          o que falta antes da validação oficial. Ela <strong>não substitui</strong> a validação do{' '}
           <a href={SERIGY_URL} target="_blank" rel="noreferrer" className={link}>
             Serigy do TCE-SE
-          </a>.<br/>
+          </a>, cujo resultado é o oficial.<br/>
           Desenvolvido por{' '}
           <a href={AUTOR.url} target="_blank" rel="noreferrer" className={link}>
             {AUTOR.nome}
