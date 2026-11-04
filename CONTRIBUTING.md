@@ -162,5 +162,7 @@ antes de divulgá-la publicamente.
 
 ## Conduta
 
-Trate as pessoas com respeito nas issues, nos pull requests e nas revisões. O repositório ainda não tem um arquivo
-de licença; antes de uma distribuição aberta, o responsável pelo projeto deve defini-la.
+Trate as pessoas com respeito nas issues, nos pull requests e nas revisões.
+
+O projeto é distribuído sob a [licença MIT](LICENSE). Ao enviar uma contribuição, você concorda que ela seja
+distribuída sob esses mesmos termos.
